@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Mock curl for bats tests.
+#
+# Logs each invocation to $BATS_TEST_TMPDIR/curl.log (tab-separated argv).
+# Reads $BATS_TEST_TMPDIR/mocks.txt for URL-substring → fixture-file mappings.
+# If the request URL matches any substring, emits the fixture on stdout.
+# Otherwise emits a synthetic CloudFlare "success:false" error response so
+# cf_api's error path can be tested too.
+#
+# URL is assumed to be the last argv per cf_api's call convention
+# (curl -sS -H ... -H ... [EXTRA] "$CF_API_BASE$path").
+
+set -euo pipefail
+
+url="${!#}"
+# Preserve argv boundaries in the log so cf_assert_called can match
+# per-argument substrings without false positives across arg boundaries.
+{
+  printf 'CALL'
+  for _arg in "$@"; do
+    printf '\t%s' "$_arg"
+  done
+  printf '\n'
+} >> "$BATS_TEST_TMPDIR/curl.log"
+
+mocks="$BATS_TEST_TMPDIR/mocks.txt"
+fixture=""
+if [[ -f "$mocks" ]]; then
+  while IFS=$'\t' read -r pattern fix; do
+    [[ -z "$pattern" ]] && continue
+    if [[ "$url" == *"$pattern"* ]]; then
+      fixture="$fix"
+      break
+    fi
+  done < "$mocks"
+fi
+
+if [[ -n "$fixture" ]]; then
+  cat "$CF_FIXTURES_DIR/$fixture"
+else
+  printf '{"success":false,"errors":[{"code":404,"message":"no mock fixture for %s"}],"messages":[],"result":null}\n' "$url"
+fi

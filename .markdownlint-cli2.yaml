@@ -1,0 +1,15 @@
+# markdownlint-cli2 config for the cloudflare repo.
+# Mirrors the workspace's global ~/.markdownlint-cli2.yaml so clones get
+# identical behaviour without depending on per-machine setup.
+
+config:
+  default: true
+  # MD013: Line length — disabled (too noisy for docs/skills with prose).
+  MD013: false
+  # MD060: Table pipe spacing — stylistic, disabled in global config.
+  MD060: false
+
+ignores:
+  - "node_modules/**"
+  - ".local/**"
+  - ".git/**"

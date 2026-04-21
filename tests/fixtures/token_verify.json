@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [
+    {"code": 10000, "message": "This API Token is valid and active"}
+  ],
+  "result": {
+    "id": "test-token-id-0123456789abcdef",
+    "status": "active",
+    "not_before": "2026-01-01T00:00:00Z",
+    "expires_on": "2027-01-01T00:00:00Z"
+  }
+}
