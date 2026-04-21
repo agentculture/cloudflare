@@ -99,3 +99,67 @@ setup() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+# --- cf_load_env: safe KEY=VALUE parser ---
+
+@test "cf_load_env parses KEY=VALUE into exported env vars (bare, double, single quotes)" {
+  local env_file="$BATS_TEST_TMPDIR/test.env"
+  printf 'CF_TEST_BARE=hello\nCF_TEST_QUOTED="quoted value"\nCF_TEST_SINGLE='"'"'single'"'"'\n' > "$env_file"
+  unset CF_SKIP_ENV
+  run bash -c "export CF_ENV_FILE='$env_file'; source '$SKILL_SCRIPTS/_lib.sh' && printf '%s|%s|%s\n' \"\$CF_TEST_BARE\" \"\$CF_TEST_QUOTED\" \"\$CF_TEST_SINGLE\""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hello|quoted value|single"* ]]
+}
+
+@test "cf_load_env tolerates leading 'export ' on assignments" {
+  local env_file="$BATS_TEST_TMPDIR/test.env"
+  printf 'export CF_TEST_EXPORTED=yes\n' > "$env_file"
+  unset CF_SKIP_ENV
+  run bash -c "export CF_ENV_FILE='$env_file'; source '$SKILL_SCRIPTS/_lib.sh' && printf '%s\n' \"\$CF_TEST_EXPORTED\""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"yes"* ]]
+}
+
+@test "cf_load_env skips comments and blank lines" {
+  local env_file="$BATS_TEST_TMPDIR/test.env"
+  printf '# top comment\n\nCF_TEST_SET=ok\n   # indented comment\n\n' > "$env_file"
+  unset CF_SKIP_ENV
+  run bash -c "export CF_ENV_FILE='$env_file'; source '$SKILL_SCRIPTS/_lib.sh' && printf '%s\n' \"\$CF_TEST_SET\""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok"* ]]
+}
+
+@test "cf_load_env warns on malformed lines but keeps parsing" {
+  local env_file="$BATS_TEST_TMPDIR/test.env"
+  printf 'this is not a valid assignment\nCF_TEST_AFTER=still_parsed\n' > "$env_file"
+  unset CF_SKIP_ENV
+  run bash -c "export CF_ENV_FILE='$env_file'; source '$SKILL_SCRIPTS/_lib.sh' && printf '%s\n' \"\$CF_TEST_AFTER\""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WARNING"* ]]
+  [[ "$output" == *"ignoring malformed line"* ]]
+  [[ "$output" == *"still_parsed"* ]]
+}
+
+@test "cf_load_env does NOT execute shell code in .env (security regression)" {
+  local env_file="$BATS_TEST_TMPDIR/test.env"
+  local evidence="$BATS_TEST_TMPDIR/pwned.txt"
+  # If the old `source` behaviour returned, this line would create pwned.txt.
+  printf '$(touch %q)\nCF_TEST_SAFE=ok\n' "$evidence" > "$env_file"
+  unset CF_SKIP_ENV
+  run bash -c "export CF_ENV_FILE='$env_file'; source '$SKILL_SCRIPTS/_lib.sh' && printf '%s\n' \"\$CF_TEST_SAFE\""
+  [ "$status" -eq 0 ]
+  [ ! -e "$evidence" ]
+  [[ "$output" == *"WARNING"* ]]
+  [[ "$output" == *"ok"* ]]
+}
+
+# --- cf_output: markdown cell escaping ---
+
+@test "cf_output md mode escapes '|' inside cell values" {
+  local json='[{"name":"rec","content":"v=spf1 include:_spf.example.com -all | legacy"}]'
+  run bash -c "source '$SKILL_SCRIPTS/_lib.sh' && cf_output '$json' md '.[] | [.name, .content] | @tsv' \"\$(printf 'NAME\tCONTENT')\""
+  [ "$status" -eq 0 ]
+  # Data pipe escaped as '\|'; structural pipes around cells still present
+  [[ "$output" == *"\\|"* ]]
+  [[ "$output" == *"| NAME | CONTENT |"* ]]
+}
