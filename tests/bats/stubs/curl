@@ -13,7 +13,15 @@
 set -euo pipefail
 
 url="${!#}"
-printf 'CALL\t%s\n' "$*" >> "$BATS_TEST_TMPDIR/curl.log"
+# Preserve argv boundaries in the log so cf_assert_called can match
+# per-argument substrings without false positives across arg boundaries.
+{
+  printf 'CALL'
+  for _arg in "$@"; do
+    printf '\t%s' "$_arg"
+  done
+  printf '\n'
+} >> "$BATS_TEST_TMPDIR/curl.log"
 
 mocks="$BATS_TEST_TMPDIR/mocks.txt"
 fixture=""

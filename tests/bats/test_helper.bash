@@ -18,11 +18,15 @@ cf_bats_setup() {
   SKILL_DIR="$BATS_TEST_DIRNAME/../../.claude/skills/cloudflare"
   # shellcheck disable=SC2034  # consumed by bats files that `load test_helper`
   SKILL_SCRIPTS="$SKILL_DIR/scripts"
+  return 0
 }
 
 # cf_mock URL_SUBSTRING FIXTURE_FILE
 cf_mock() {
-  printf '%s\t%s\n' "$1" "$2" >> "$BATS_TEST_TMPDIR/mocks.txt"
+  local pattern="$1"
+  local fixture="$2"
+  printf '%s\t%s\n' "$pattern" "$fixture" >> "$BATS_TEST_TMPDIR/mocks.txt"
+  return 0
 }
 
 cf_assert_called() {
@@ -32,4 +36,5 @@ cf_assert_called() {
     cat "$BATS_TEST_TMPDIR/curl.log" >&2 || true
     return 1
   fi
+  return 0
 }
