@@ -20,21 +20,17 @@ Fetch, reply to, and resolve PR review comments via `gh` CLI.
 
 ## Auto-poll after PR creation
 
-When a new PR has just been created, do **not** wait for the user to say "check for comments." Invoke the `loop` skill with a self-paced polling prompt so qodo, Copilot, and SonarCloud feedback gets picked up automatically:
+When a new PR has just been created, do **not** wait for the user to say "check for comments." Hand off to the `poll` skill (project-local) with the new PR number:
 
 ```text
-Skill loop   args: |
-  Poll PR #<N> at <owner>/<repo> for review activity. Each iteration run
-  bash .claude/skills/pr-review/scripts/pr-comments.sh <N>. If there are
-  new comments since the last check, invoke this pr-review skill to
-  triage FIX vs PUSHBACK, implement fixes with bats + shellcheck +
-  markdownlint green, push, reply, and resolve threads. If the PR is
-  merged, stop polling. Cadence: first two polls ~3min (automated
-  reviewers usually land in 2–5min), then back off to 20–30min until
-  something changes.
+Skill poll   args: "PR_NUMBER"
 ```
 
-The user can interrupt the poll any time with "stop" / "cancel" / "that's enough."
+`poll` spawns a background subagent that runs `pr-comments.sh` every 60 seconds and notifies the main session ONLY when both qodo and Copilot have posted their full reviews (or the PR is merged/closed). The main session does not wake on heartbeats — it only pays context once, when the wait is over.
+
+When the subagent's notification arrives, refetch via `pr-comments.sh` and run this skill to triage, fix, push, reply, and resolve.
+
+The user can interrupt the background poller at any time with "stop" / "cancel" / "that's enough."
 
 ## Workflow
 

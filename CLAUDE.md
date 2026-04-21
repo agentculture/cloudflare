@@ -68,10 +68,11 @@ Bash + `curl` + `jq`, no runtime Python deps. Matches the house style in `cultur
 
 ## PR workflow
 
-All work goes through a feature branch + PR + automated review cycle (qodo, Copilot, SonarCloud). The vendored `pr-review` skill at `.claude/skills/pr-review/` owns the details — read its `SKILL.md` for the full workflow. Two cheat-sheet points:
+All work goes through a feature branch + PR + automated review cycle (qodo, Copilot, SonarCloud). The vendored `pr-review` skill at `.claude/skills/pr-review/` owns the details — read its `SKILL.md` for the full workflow. Three cheat-sheet points:
 
-- **After `gh pr create`, immediately start polling.** Invoke the `loop` skill with a self-paced polling prompt for the new PR — don't wait for the user to ask. See `.claude/skills/pr-review/SKILL.md` § *Auto-poll after PR creation*.
+- **After `gh pr create`, immediately invoke the `poll` skill.** It spawns a background subagent that watches the PR and notifies you only when both qodo and Copilot have finished. Cheaper than self-paced wakeups because the main session doesn't burn context on heartbeats. See `.claude/skills/poll/SKILL.md`.
 - **Fetch ALL review feedback with one call:** `bash .claude/skills/pr-review/scripts/pr-comments.sh <PR>`. It returns inline comments, issue comments, top-level reviews, and SonarCloud new issues in a single pass — don't hand-roll `gh api` / `curl sonarcloud.io` calls.
+- **Triage / reply / resolve** via the `pr-review` skill once the poll wakes you.
 
 ## Active design context
 
