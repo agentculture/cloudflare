@@ -52,8 +52,9 @@ if [[ -z "$zone_id" ]]; then
   exit 1
 fi
 
-# Step 2: list DNS records for that zone
-response=$(cf_api "/zones/$zone_id/dns_records")
+# Step 2: list DNS records for that zone. Paginated — active zones
+# routinely exceed CloudFlare's default 20-per-page response size.
+response=$(cf_api_paginated "/zones/$zone_id/dns_records")
 
 if [[ "$mode" == "md" ]]; then
   count=$(printf '%s' "$response" | jq -r '.result | length')

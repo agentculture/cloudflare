@@ -33,7 +33,7 @@ done
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cf_require_account_id
 
-response=$(cf_api "/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts")
+response=$(cf_api_paginated "/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts")
 
 if [[ "$mode" == "md" ]]; then
   count=$(printf '%s' "$response" | jq -r '.result | length')

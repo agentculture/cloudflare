@@ -27,7 +27,7 @@ done
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-response=$(cf_api /zones)
+response=$(cf_api_paginated /zones)
 
 if [[ "$mode" == "md" ]]; then
   count=$(printf '%s' "$response" | jq -r '.result | length')

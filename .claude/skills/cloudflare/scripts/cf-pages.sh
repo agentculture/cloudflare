@@ -43,7 +43,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cf_require_account_id
 
 if [[ -z "$project" ]]; then
-  response=$(cf_api "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
+  response=$(cf_api_paginated "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
 
   if [[ "$mode" == "md" ]]; then
     count=$(printf '%s' "$response" | jq -r '.result | length')
@@ -55,7 +55,7 @@ if [[ -z "$project" ]]; then
     '.result[] | [.name, (.production_branch // "—"), (.subdomain // "—"), (.latest_deployment.created_on // "—")] | @tsv' \
     "$(printf 'NAME\tBRANCH\tSUBDOMAIN\tLATEST')"
 else
-  response=$(cf_api "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/deployments")
+  response=$(cf_api_paginated "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/deployments")
 
   if [[ "$mode" == "md" ]]; then
     count=$(printf '%s' "$response" | jq -r '.result | length')

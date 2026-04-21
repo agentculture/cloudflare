@@ -16,6 +16,10 @@
 #   CF_ENV_FILE           (optional) — path to .env, defaults to repo root
 
 set -euo pipefail
+# Propagate set -e into command-substitution subshells so a failing
+# cf_api inside cf_api_paginated's $(...) actually exits the caller.
+# Without this, default bash 4.4+ silently swallows the inner exit 1.
+shopt -s inherit_errexit
 
 _CF_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CF_REPO_ROOT="$(cd "$_CF_LIB_DIR/../../../.." && pwd)"

@@ -32,8 +32,9 @@ done
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# Step 1: enumerate zones the token can see
-zones_response=$(cf_api /zones)
+# Step 1: enumerate zones the token can see (paginated — some accounts
+# have >50 zones).
+zones_response=$(cf_api_paginated /zones)
 zone_count=$(printf '%s' "$zones_response" | jq -r '.result | length')
 
 # Step 2: fetch routes per zone, accumulate into a single array with
@@ -41,7 +42,7 @@ zone_count=$(printf '%s' "$zones_response" | jq -r '.result | length')
 all_routes='[]'
 while IFS=$'\t' read -r zone_id zone_name; do
   [[ -z "$zone_id" ]] && continue
-  routes_response=$(cf_api "/zones/$zone_id/workers/routes")
+  routes_response=$(cf_api_paginated "/zones/$zone_id/workers/routes")
   enriched=$(printf '%s' "$routes_response" | jq --arg zname "$zone_name" \
     '(.result // []) | map(. + {zone_name: $zname})')
   all_routes=$(jq -s 'add' <(printf '%s' "$all_routes") <(printf '%s' "$enriched"))
