@@ -3,10 +3,16 @@ set -euo pipefail
 
 # Fetch and display all PR feedback in one pass:
 #   1. Inline review comments (with thread resolve status)
-#   2. Issue comments (qodo summaries, sonarcloud, etc.)
-#   3. Top-level reviews with a non-empty body (copilot overview, etc.)
+#   2. Issue comments (qodo summaries, sonarcloud quality-gate, etc.)
+#   3. Top-level reviews with a non-empty body (copilot overviews, etc.)
+#   4. SonarCloud new issues (public API; skipped if the project isn't
+#      registered or the network call fails).
 #
 # Usage: pr-comments.sh [--repo OWNER/REPO] PR_NUMBER
+#
+# SonarCloud project key is derived from the GitHub convention
+# "<org>_<repo>" (e.g. agentculture_cloudflare). Override with
+# SONAR_PROJECT_KEY=<key> for non-standard naming.
 
 REPO=""
 
@@ -117,3 +123,27 @@ echo "$REVIEWS_WITH_BODY" | jq -r '
   (.body | split("\n") | if length > 10 then .[:10] + ["... (truncated)"] else . end | join("\n")),
   ""
 '
+
+# ── Section 4: SonarCloud new issues (optional) ────────────────────────
+# Saves one manual curl per review cycle. Silently skipped if SonarCloud
+# isn't configured for this repo (API returns an error, which we detect
+# by the absence of an .issues field in the response).
+SONAR_KEY="${SONAR_PROJECT_KEY:-${REPO/\//_}}"
+SONAR_URL="https://sonarcloud.io/api/issues/search?componentKeys=${SONAR_KEY}&pullRequest=${PR_NUMBER}&resolved=false&ps=100"
+SONAR_JSON=$(curl -sSf "$SONAR_URL" 2>/dev/null || true)
+
+if [[ -n "$SONAR_JSON" ]] && echo "$SONAR_JSON" | jq -e '.issues' >/dev/null 2>&1; then
+    SONAR_COUNT=$(echo "$SONAR_JSON" | jq '.issues | length')
+    echo ""
+    echo "════════════════ SONARCLOUD NEW ISSUES ($SONAR_COUNT) ════════════════"
+    if (( SONAR_COUNT == 0 )); then
+        echo "(quality gate passed — no new issues on this PR)"
+    else
+        echo "$SONAR_JSON" | jq -r '.issues[] |
+          "──────────────────────────────────────────────────",
+          "File: \(.component | sub(".*:"; ""))  |  Line: \(.line // "?")",
+          "Severity: \(.severity // "?")  |  Type: \(.type // "?")  |  Rule: \(.rule // "?")",
+          "Message: \(.message // "?")",
+          ""'
+    fi
+fi
