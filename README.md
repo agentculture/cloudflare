@@ -1,2 +1,28 @@
 # cloudflare
-CloudFlare Agent
+
+CloudFlare management for the [AgentCulture OSS](https://culture.dev) organization, implemented as Claude Code skills and subagents ("ClaudeFlare"). Part of the Culture workspace.
+
+## Setup
+
+1. Copy the env template: `cp .env.example .env`
+2. Provision a CloudFlare API token with the read-only scopes listed in `.env.example`, scoped to the AgentCulture account. Paste the token and your account ID into `.env`.
+3. Verify: `bash .claude/skills/cloudflare/scripts/cf-whoami.sh` — should print `status: active` and the granted scopes.
+
+`.env` is gitignored. Do not commit it.
+
+## Skills
+
+- [`cloudflare`](.claude/skills/cloudflare/SKILL.md) — read-only visibility into DNS, Workers, and Pages for zones in the AgentCulture account.
+
+## Tests
+
+Pipeline tests run in CI on every PR. To run locally:
+
+```sh
+bash tests/shellcheck.sh   # static analysis across all shell scripts
+bats tests/bats/           # unit tests (mocked curl, real jq, no live token required)
+```
+
+Required tools on the developer machine: `bash`, `curl`, `jq`, `shellcheck`, `bats`.
+
+See `CLAUDE.md` for architecture, constraints, and the phase roadmap.
