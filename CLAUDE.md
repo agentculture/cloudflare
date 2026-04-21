@@ -10,30 +10,39 @@ Parent workspace context lives in `../CLAUDE.md`. The global workspace uses uv f
 
 ## Current state
 
-Phase 1 (read-only skills) is complete. See `.claude/skills/cloudflare/SKILL.md` for the user-facing skill documentation (what each script does, when it runs, how to add new read scripts).
+Phase 1 (read-only skills) is complete, and the first write-ops script (Single Redirect creation) has landed in a **separate skill** so read and write stay decoupled. See each skill's `SKILL.md` for user-facing docs (what each script does, when it runs, how to add new scripts).
 
 Layout:
 
 ```text
-.claude/skills/cloudflare/        # one skill; read-only ops today, write ops will land here
-  SKILL.md                        # user-facing skill instructions + trigger phrases
+.claude/skills/cloudflare/           # read-only inventory skill
+  SKILL.md                           # user-facing skill instructions + trigger phrases
   scripts/
-    _lib.sh                       # shared helpers: env load, cf_api, cf_api_paginated,
-                                  # cf_output, cf_output_kv, cf_require_account_id
-    cf-whoami.sh                  # verify token status and expiry
-    cf-zones.sh                   # list zones the token can see
-    cf-dns.sh ZONE                # list DNS records for a zone (resolves name → id)
-    cf-workers.sh                 # list Workers scripts in the account
-    cf-workers-routes.sh          # aggregate Workers routes across every zone
-    cf-pages.sh [PROJECT]         # list Pages projects (or a project's deployments)
-.claude/skills/pr-review/         # vendored from ~/.claude/skills — fetch/reply/resolve PR comments
+    _lib.sh                          # shared helpers: env load, cf_api, cf_api_paginated,
+                                     # cf_output, cf_output_kv, cf_require_account_id
+    cf-whoami.sh                     # verify token status and expiry
+    cf-zones.sh                      # list zones the token can see
+    cf-dns.sh ZONE                   # list DNS records for a zone (resolves name → id)
+    cf-workers.sh                    # list Workers scripts in the account
+    cf-workers-routes.sh             # aggregate Workers routes across every zone
+    cf-pages.sh [PROJECT]            # list Pages projects (or a project's deployments)
+    cf-status.sh                     # single-shot digest of all of the above
+.claude/skills/cloudflare-write/     # write/edit/delete skill — NEEDS SEPARATE TOKEN
+  SKILL.md
+  scripts/
+    _lib.sh                          # symlink → ../../cloudflare/scripts/_lib.sh (DRY)
+    cf-redirect-create.sh            # create a zone Single Redirect (dry-run default, --apply to commit)
+.claude/skills/pr-review/            # vendored from ~/.claude/skills — fetch/reply/resolve PR comments
 tests/
-  bats/                           # bats-core unit tests; PATH-injected curl stub for offline mocking
-  fixtures/                       # canned API responses
-  shellcheck.sh                   # shellcheck every shell script in the repo
-  markdownlint.sh                 # markdownlint-cli2 every .md file in the repo
-.github/workflows/test.yml        # CI: shellcheck + markdownlint + bats on every PR
+  bats/                              # bats-core unit tests; PATH-injected curl stub for offline mocking
+  fixtures/                          # canned API responses
+  shellcheck.sh                      # shellcheck every shell script in the repo
+  markdownlint.sh                    # markdownlint-cli2 every .md file in the repo
+docs/SETUP.md                        # token creation walkthrough (read token in §1, write token in §1.5)
+.github/workflows/test.yml           # CI: shellcheck + markdownlint + bats on every PR
 ```
+
+**Skills split:** `cloudflare` (read) and `cloudflare-write` (write) are discrete skills with separate discovery triggers so agents can't accidentally mutate state while answering an inventory question. Both share `_lib.sh` via symlink — fixes to the helpers apply to both. Write scripts default to dry-run and require `--apply` to actually POST/PUT/DELETE.
 
 Pagination is transparent: `cf_api_paginated` in `_lib.sh` walks every page of a list endpoint so scripts see one aggregated `.result`. `shopt -s inherit_errexit` is enabled in `_lib.sh` so `exit 1` inside `cf_api` propagates through the `$(...)` layer `cf_api_paginated` adds — removing this breaks error-path tests silently.
 
@@ -54,9 +63,10 @@ Bash + `curl` + `jq`, no runtime Python deps. Matches the house style in `cultur
 
 ## Roadmap
 
-1. **Phase 1 — read-only skills** ✓ Done. All six scripts (`cf-whoami`, `cf-zones`, `cf-dns`, `cf-workers`, `cf-workers-routes`, `cf-pages`) plus pagination, CI, and docs.
-2. **Phase 2 — `agentirc.dev` Pages cleanup.** `agentirc.dev` is deprecated and folded into `culture.dev/agentirc` with a redirect. Phase 1's `cf-pages.sh` and `cf-workers-routes.sh` are the inventory tools for the removal plan; Phase 2 introduces the first write operations (delete endpoints).
-3. **Later:** multi-domain support, mesh integration, expansion to R2 / Access / Zero Trust, and potentially mixed CloudFlare–AWS workflows.
+1. **Phase 1 — read-only skills** ✓ Done. All seven scripts (`cf-whoami`, `cf-zones`, `cf-dns`, `cf-workers`, `cf-workers-routes`, `cf-pages`, `cf-status`) plus pagination, CI, and docs.
+2. **Phase 2 — write skill bootstrap + first redirect** ✓ In progress. Introduces the `cloudflare-write` skill and `cf-redirect-create.sh` (issue #2 — `agentculture.org → culture.dev`). Establishes the dry-run-by-default / `--apply`-to-commit safety pattern that all future `cf-*-create.sh` / `cf-*-update.sh` / `cf-*-delete.sh` scripts will follow.
+3. **Phase 3 — `agentirc.dev` cleanup.** `agentirc.dev` is deprecated. Uses the inventory scripts (`cf-pages`, `cf-dns`, `cf-workers-routes`) as the audit trail, then deletes via new `cf-*-delete.sh` scripts in `cloudflare-write`.
+4. **Later:** multi-domain support, mesh integration, expansion to R2 / Access / Zero Trust, and potentially mixed CloudFlare–AWS workflows.
 
 ## Conventions for adding code
 

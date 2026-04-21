@@ -17,7 +17,8 @@ Long version (dashboard walkthrough, scope-to-script mapping, common errors): se
 
 ## Skills
 
-- [`cloudflare`](.claude/skills/cloudflare/SKILL.md) — read-only visibility into DNS, Workers, and Pages for zones in the AgentCulture account.
+- [`cloudflare`](.claude/skills/cloudflare/SKILL.md) — **read-only** visibility into DNS, Workers, and Pages for zones in the AgentCulture account.
+- [`cloudflare-write`](.claude/skills/cloudflare-write/SKILL.md) — **create / update / delete** operations (e.g. Single Redirect rules). Dry-run by default; `--apply` is required to mutate. Needs a separate API token with Edit scopes (see [`docs/SETUP.md`](docs/SETUP.md) §1.5).
 
 ## Tests
 
