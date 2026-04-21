@@ -128,17 +128,39 @@ echo "$REVIEWS_WITH_BODY" | jq -r '
 # Saves one manual curl per review cycle. Silently skipped if SonarCloud
 # isn't configured for this repo (API returns an error, which we detect
 # by the absence of an .issues field in the response).
+#
+# Hardening:
+# - --get + --data-urlencode: SONAR_KEY is user-controlled (env var or
+#   GitHub repo name); URL-encoding prevents query-string injection
+#   from chars like & or ? in non-standard project keys.
+# - --connect-timeout/--max-time/--retry: a stalled SonarCloud network
+#   call must NOT block the rest of the feedback fetch. Hard cap at
+#   ~17s per attempt (5s connect + ≤15s overall + 1 retry).
+# - .paging.total: SonarCloud caps page size at 100; if a PR has more
+#   issues than that, we report the true total and warn that the
+#   listing below is truncated.
 SONAR_KEY="${SONAR_PROJECT_KEY:-${REPO/\//_}}"
-SONAR_URL="https://sonarcloud.io/api/issues/search?componentKeys=${SONAR_KEY}&pullRequest=${PR_NUMBER}&resolved=false&ps=100"
-SONAR_JSON=$(curl -sSf "$SONAR_URL" 2>/dev/null || true)
+SONAR_JSON=$(curl -sSf --get \
+    --connect-timeout 5 --max-time 15 --retry 1 --retry-delay 1 \
+    "https://sonarcloud.io/api/issues/search" \
+    --data-urlencode "componentKeys=${SONAR_KEY}" \
+    --data-urlencode "pullRequest=${PR_NUMBER}" \
+    --data-urlencode "resolved=false" \
+    --data-urlencode "ps=100" \
+    2>/dev/null || true)
 
 if [[ -n "$SONAR_JSON" ]] && echo "$SONAR_JSON" | jq -e '.issues' >/dev/null 2>&1; then
-    SONAR_COUNT=$(echo "$SONAR_JSON" | jq '.issues | length')
+    SONAR_FETCHED=$(echo "$SONAR_JSON" | jq '.issues | length')
+    SONAR_TOTAL=$(echo "$SONAR_JSON" | jq '.paging.total // (.issues | length)')
     echo ""
-    echo "════════════════ SONARCLOUD NEW ISSUES ($SONAR_COUNT) ════════════════"
-    if (( SONAR_COUNT == 0 )); then
+    echo "════════════════ SONARCLOUD NEW ISSUES ($SONAR_TOTAL) ════════════════"
+    if (( SONAR_TOTAL == 0 )); then
         echo "(quality gate passed — no new issues on this PR)"
     else
+        if (( SONAR_TOTAL > SONAR_FETCHED )); then
+            echo "(showing first $SONAR_FETCHED of $SONAR_TOTAL — see SonarCloud directly for the rest)"
+            echo ""
+        fi
         echo "$SONAR_JSON" | jq -r '.issues[] |
           "──────────────────────────────────────────────────",
           "File: \(.component | sub(".*:"; ""))  |  Line: \(.line // "?")",
