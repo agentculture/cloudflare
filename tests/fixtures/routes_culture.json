@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "id": "route-culture-dev-0000000000000001",
+      "pattern": "culture.dev/*",
+      "script": "culture-dev-router"
+    }
+  ],
+  "result_info": {"page": 1, "per_page": 20, "total_pages": 1, "count": 1, "total_count": 1}
+}
