@@ -118,6 +118,11 @@ Only add commits to an existing PR's branch if they are directly related to that
 ## Notes
 
 - All scripts auto-detect `owner/repo` from the current git repo
-- Replies are auto-signed with `\n\n- Claude` per global CLAUDE.md
+- Replies are auto-signed with `\n\n- Claude` so recipients know the reply was written by an AI assistant
 - Thread resolution uses GitHub GraphQL API (REST doesn't support it)
 - Requires `gh` CLI authenticated and `jq` installed
+- `reviewThreads(first: 100)` is not paginated; the scripts warn to stderr on PRs with more than 100 review threads. If you hit that, either narrow the PR scope or extend the scripts with full GraphQL pagination
+
+## Argument validation
+
+`PR_NUMBER` and `COMMENT_ID` must be positive integers — the scripts interpolate them into GraphQL query strings and jq filters, and reject non-numeric input with exit status 2.
