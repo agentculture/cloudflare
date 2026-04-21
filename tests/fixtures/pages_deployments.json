@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "id": "dep-agentirc-latest-production",
+      "short_id": "7777ffff",
+      "project_id": "proj-id-agentirc-dev",
+      "project_name": "agentirc-dev",
+      "environment": "production",
+      "url": "https://7777ffff.agentirc-dev.pages.dev",
+      "created_on": "2026-02-10T10:00:00.000000Z",
+      "modified_on": "2026-02-10T10:05:00.000000Z",
+      "latest_stage": {"name": "deploy", "status": "success"},
+      "deployment_trigger": {"type": "ad_hoc", "metadata": {"branch": "main", "commit_hash": "abc123", "commit_message": "deploy"}}
+    },
+    {
+      "id": "dep-agentirc-preview-test",
+      "short_id": "66aaccee",
+      "project_id": "proj-id-agentirc-dev",
+      "project_name": "agentirc-dev",
+      "environment": "preview",
+      "url": "https://66aaccee.agentirc-dev.pages.dev",
+      "created_on": "2026-01-15T14:30:00.000000Z",
+      "modified_on": "2026-01-15T14:35:00.000000Z",
+      "latest_stage": {"name": "deploy", "status": "success"},
+      "deployment_trigger": {"type": "ad_hoc", "metadata": {"branch": "preview-refresh", "commit_hash": "def456", "commit_message": "wip"}}
+    },
+    {
+      "id": "dep-agentirc-initial-production",
+      "short_id": "00001111",
+      "project_id": "proj-id-agentirc-dev",
+      "project_name": "agentirc-dev",
+      "environment": "production",
+      "url": "https://00001111.agentirc-dev.pages.dev",
+      "created_on": "2025-09-01T08:10:00.000000Z",
+      "modified_on": "2025-09-01T08:15:00.000000Z",
+      "latest_stage": {"name": "deploy", "status": "success"},
+      "deployment_trigger": {"type": "ad_hoc", "metadata": {"branch": "main", "commit_hash": "000aaa", "commit_message": "initial"}}
+    }
+  ],
+  "result_info": {"page": 1, "per_page": 25, "total_pages": 1, "count": 3, "total_count": 3}
+}

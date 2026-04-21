@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "id": "zone-id-culture-dev-0123456789abcdef",
+      "name": "culture.dev",
+      "status": "active",
+      "paused": false,
+      "type": "full",
+      "development_mode": 0,
+      "name_servers": ["amelia.ns.cloudflare.com", "hugh.ns.cloudflare.com"],
+      "plan": {"id": "0feeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "name": "Free Website"},
+      "created_on": "2025-11-01T12:00:00.000000Z",
+      "modified_on": "2026-03-15T09:00:00.000000Z"
+    },
+    {
+      "id": "zone-id-agentirc-dev-fedcba9876543210",
+      "name": "agentirc.dev",
+      "status": "active",
+      "paused": false,
+      "type": "full",
+      "development_mode": 0,
+      "name_servers": ["amelia.ns.cloudflare.com", "hugh.ns.cloudflare.com"],
+      "plan": {"id": "0feeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "name": "Free Website"},
+      "created_on": "2025-09-12T14:30:00.000000Z",
+      "modified_on": "2026-04-21T10:15:00.000000Z"
+    }
+  ],
+  "result_info": {"page": 1, "per_page": 20, "total_pages": 1, "count": 2, "total_count": 2}
+}

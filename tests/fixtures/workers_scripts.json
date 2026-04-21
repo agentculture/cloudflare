@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "id": "culture-dev-router",
+      "etag": "abc123etag0000000000000000000001",
+      "handlers": ["fetch"],
+      "modified_on": "2026-03-10T14:22:00.000000Z",
+      "created_on": "2025-11-20T09:00:00.000000Z",
+      "usage_model": "standard",
+      "logpush": false
+    },
+    {
+      "id": "agentirc-redirect",
+      "etag": "abc123etag0000000000000000000002",
+      "handlers": ["fetch"],
+      "modified_on": "2026-04-01T11:00:00.000000Z",
+      "created_on": "2026-01-15T10:00:00.000000Z",
+      "usage_model": "bundled",
+      "logpush": false
+    }
+  ],
+  "result_info": {"page": 1, "per_page": 20, "total_pages": 1, "count": 2, "total_count": 2}
+}

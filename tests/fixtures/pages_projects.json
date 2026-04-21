@@ -1,0 +1,42 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "name": "culture-dev-site",
+      "id": "proj-id-culture-dev-site",
+      "created_on": "2025-11-01T12:00:00.000000Z",
+      "subdomain": "culture-dev-site.pages.dev",
+      "domains": ["culture.dev", "www.culture.dev"],
+      "production_branch": "main",
+      "source": {"type": "github", "config": {"owner": "agentculture", "repo_name": "culture-dev-site", "production_branch": "main"}},
+      "latest_deployment": {
+        "id": "dep-latest-culture-dev",
+        "short_id": "a1b2c3d4",
+        "environment": "production",
+        "url": "https://a1b2c3d4.culture-dev-site.pages.dev",
+        "created_on": "2026-04-20T12:00:00.000000Z",
+        "latest_stage": {"name": "deploy", "status": "success"}
+      }
+    },
+    {
+      "name": "agentirc-dev",
+      "id": "proj-id-agentirc-dev",
+      "created_on": "2025-09-01T08:00:00.000000Z",
+      "subdomain": "agentirc-dev.pages.dev",
+      "domains": ["agentirc.dev"],
+      "production_branch": "main",
+      "source": {"type": "github", "config": {"owner": "agentculture", "repo_name": "agentirc-site", "production_branch": "main"}},
+      "latest_deployment": {
+        "id": "dep-latest-agentirc",
+        "short_id": "7777ffff",
+        "environment": "production",
+        "url": "https://7777ffff.agentirc-dev.pages.dev",
+        "created_on": "2026-02-10T10:00:00.000000Z",
+        "latest_stage": {"name": "deploy", "status": "success"}
+      }
+    }
+  ],
+  "result_info": {"page": 1, "per_page": 20, "total_pages": 1, "count": 2, "total_count": 2}
+}

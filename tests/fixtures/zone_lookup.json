@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "id": "zone-id-culture-dev-0123456789abcdef",
+      "name": "culture.dev",
+      "status": "active",
+      "paused": false,
+      "type": "full"
+    }
+  ],
+  "result_info": {"page": 1, "per_page": 20, "total_pages": 1, "count": 1, "total_count": 1}
+}

@@ -16,6 +16,10 @@
 #   CF_ENV_FILE           (optional) — path to .env, defaults to repo root
 
 set -euo pipefail
+# Propagate set -e into command-substitution subshells so a failing
+# cf_api inside cf_api_paginated's $(...) actually exits the caller.
+# Without this, default bash 4.4+ silently swallows the inner exit 1.
+shopt -s inherit_errexit
 
 _CF_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CF_REPO_ROOT="$(cd "$_CF_LIB_DIR/../../../.." && pwd)"
@@ -148,5 +152,46 @@ cf_require_account_id() {
     echo "ERROR: CLOUDFLARE_ACCOUNT_ID not set. Required for account-scoped endpoints (Workers, Pages)." >&2
     exit 1
   fi
+  return 0
+}
+
+# cf_api_paginated PATH
+#
+# Fetches every page of a CloudFlare list endpoint and emits one
+# synthetic response envelope whose .result is the concatenation of
+# every page's .result. Uses per_page=50 (overridable via CF_PAGE_SIZE
+# env var) and follows .result_info.total_pages to terminate.
+#
+# Call this on list endpoints that return
+#   { result: [...], result_info: {page, per_page, total_pages, ...} }.
+# Do NOT call it on single-object endpoints (e.g. /user/tokens/verify) —
+# use cf_api directly there.
+cf_api_paginated() {
+  local path="$1"
+  local per_page="${CF_PAGE_SIZE:-50}"
+  local separator="?"
+  [[ "$path" == *"?"* ]] && separator="&"
+
+  local page=1
+  local all_results='[]'
+  local response page_results total_pages last_info='{}'
+
+  while :; do
+    response=$(cf_api "${path}${separator}per_page=${per_page}&page=${page}")
+    page_results=$(printf '%s' "$response" | jq '.result // []')
+    all_results=$(jq -s 'add' <(printf '%s' "$all_results") <(printf '%s' "$page_results"))
+    total_pages=$(printf '%s' "$response" | jq -r '.result_info.total_pages // 1')
+    last_info=$(printf '%s' "$response" | jq '.result_info // {}')
+    if (( page >= total_pages )); then
+      break
+    fi
+    ((page++))
+  done
+
+  # shellcheck disable=SC2016  # single-quoted jq filter
+  jq -n \
+    --argjson results "$all_results" \
+    --argjson info "$last_info" \
+    '{success: true, errors: [], messages: [], result: $results, result_info: ($info + {page: 1, total_pages: 1, count: ($results | length), total_count: ($results | length)})}'
   return 0
 }

@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {"id": "item-p1a", "name": "alpha"},
+    {"id": "item-p1b", "name": "bravo"}
+  ],
+  "result_info": {"page": 1, "per_page": 50, "total_pages": 2, "count": 2, "total_count": 3}
+}

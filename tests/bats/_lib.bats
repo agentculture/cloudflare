@@ -163,3 +163,59 @@ setup() {
   [[ "$output" == *"\\|"* ]]
   [[ "$output" == *"| NAME | CONTENT |"* ]]
 }
+
+# --- cf_api_paginated: walk total_pages ---
+
+@test "cf_api_paginated concatenates .result across all pages" {
+  cf_mock "&page=1" "paginated_page1.json"
+  cf_mock "&page=2" "paginated_page2.json"
+  run bash -c "source '$SKILL_SCRIPTS/_lib.sh' && cf_api_paginated /zones"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.success == true'
+  echo "$output" | jq -e '.result | length == 3'
+  echo "$output" | jq -e '.result | map(.name) | . == ["alpha","bravo","charlie"]'
+}
+
+@test "cf_api_paginated issues one request per page (follows total_pages)" {
+  cf_mock "&page=1" "paginated_page1.json"
+  cf_mock "&page=2" "paginated_page2.json"
+  run bash -c "source '$SKILL_SCRIPTS/_lib.sh' && cf_api_paginated /zones"
+  [ "$status" -eq 0 ]
+  cf_assert_called "per_page=50&page=1"
+  cf_assert_called "per_page=50&page=2"
+}
+
+@test "cf_api_paginated stops after page 1 when total_pages is 1" {
+  cf_mock "/zones" "zones.json"
+  run bash -c "source '$SKILL_SCRIPTS/_lib.sh' && cf_api_paginated /zones"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.result | length == 2'
+  cf_assert_called "per_page=50&page=1"
+  run grep -F "page=2" "$BATS_TEST_TMPDIR/curl.log"
+  [ "$status" -ne 0 ]
+}
+
+@test "cf_api_paginated appends &per_page=... when path already has a query string" {
+  cf_mock "/zones?name=" "zone_lookup.json"
+  run bash -c "source '$SKILL_SCRIPTS/_lib.sh' && cf_api_paginated '/zones?name=culture.dev'"
+  [ "$status" -eq 0 ]
+  cf_assert_called "/zones?name=culture.dev&per_page=50&page=1"
+}
+
+@test "cf_api_paginated returns synthetic result_info (page=1 total_pages=1 count=sum)" {
+  cf_mock "&page=1" "paginated_page1.json"
+  cf_mock "&page=2" "paginated_page2.json"
+  run bash -c "source '$SKILL_SCRIPTS/_lib.sh' && cf_api_paginated /zones"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.result_info.page == 1'
+  echo "$output" | jq -e '.result_info.total_pages == 1'
+  echo "$output" | jq -e '.result_info.count == 3'
+  echo "$output" | jq -e '.result_info.total_count == 3'
+}
+
+@test "cf_api_paginated honors CF_PAGE_SIZE env var" {
+  cf_mock "/zones" "zones.json"
+  run bash -c "export CF_PAGE_SIZE=25; source '$SKILL_SCRIPTS/_lib.sh' && cf_api_paginated /zones"
+  [ "$status" -eq 0 ]
+  cf_assert_called "per_page=25&page=1"
+}
