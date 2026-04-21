@@ -14,8 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
-      # ubuntu-latest already has bash, curl, jq, shellcheck, and node.
-      # bats and markdownlint-cli2 need installing.
+      # Pin Node to a specific major so markdownlint-cli2 runs on the same
+      # runtime locally and in CI, regardless of what node version
+      # ubuntu-latest happens to ship with on any given day.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: '20'
+
+      # ubuntu-latest already has bash, curl, jq, and shellcheck.
+      # bats (apt) and markdownlint-cli2 (npm, version-pinned) need installing.
       - name: Install bats and markdownlint-cli2
         run: |
           sudo apt-get update -qq
