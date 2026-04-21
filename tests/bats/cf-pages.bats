@@ -39,8 +39,10 @@ setup() {
 # --- single-project mode (project arg) ---
 
 @test "cf-pages.sh PROJECT lists deployments with heading and count" {
-  # Order matters: specific '/deployments' mock first so it wins over '/pages/projects'.
-  cf_mock "/deployments" "pages_deployments.json"
+  # Specific path uniquely identifies the deployments call; the broader
+  # "/pages/projects" mock matches only the bare listing call. Stub uses
+  # longest-match-wins so registration order doesn't matter.
+  cf_mock "/pages/projects/agentirc-dev/deployments" "pages_deployments.json"
   cf_mock "/pages/projects" "pages_projects.json"
   run bash "$SKILL_SCRIPTS/cf-pages.sh" agentirc-dev
   [ "$status" -eq 0 ]
@@ -53,7 +55,7 @@ setup() {
 }
 
 @test "cf-pages.sh PROJECT hits the deployments endpoint for that project" {
-  cf_mock "/deployments" "pages_deployments.json"
+  cf_mock "/pages/projects/agentirc-dev/deployments" "pages_deployments.json"
   cf_mock "/pages/projects" "pages_projects.json"
   run bash "$SKILL_SCRIPTS/cf-pages.sh" agentirc-dev
   [ "$status" -eq 0 ]
@@ -61,7 +63,7 @@ setup() {
 }
 
 @test "cf-pages.sh PROJECT --json passes raw deployments response through" {
-  cf_mock "/deployments" "pages_deployments.json"
+  cf_mock "/pages/projects/agentirc-dev/deployments" "pages_deployments.json"
   cf_mock "/pages/projects" "pages_projects.json"
   run bash "$SKILL_SCRIPTS/cf-pages.sh" agentirc-dev --json
   [ "$status" -eq 0 ]
@@ -92,7 +94,7 @@ setup() {
 }
 
 @test "cf-pages.sh URL-encodes the project argument so '/' cannot alter the path" {
-  cf_mock "/deployments" "pages_deployments.json"
+  cf_mock "/pages/projects/agentirc-dev/deployments" "pages_deployments.json"
   cf_mock "/pages/projects" "pages_projects.json"
   run bash "$SKILL_SCRIPTS/cf-pages.sh" 'has/slash'
   # Slash must be encoded as %2F so it stays in the project segment

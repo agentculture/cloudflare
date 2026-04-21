@@ -3,9 +3,16 @@
 #
 # Logs each invocation to $BATS_TEST_TMPDIR/curl.log (tab-separated argv).
 # Reads $BATS_TEST_TMPDIR/mocks.txt for URL-substring → fixture-file mappings.
-# If the request URL matches any substring, emits the fixture on stdout.
-# Otherwise emits a synthetic CloudFlare "success:false" error response so
-# cf_api's error path can be tested too.
+#
+# Match policy: LONGEST substring wins, not first-match. This makes mock
+# registration order irrelevant — a more specific pattern (e.g.
+# "/pages/projects/agentirc-dev/deployments") always wins over a less
+# specific one (e.g. "/pages/projects") regardless of which was added
+# first. Tests with overlapping URL hierarchies stay correct without
+# relying on registration ordering.
+#
+# If no pattern matches, emits a synthetic CloudFlare "success:false"
+# error response so cf_api's error path is reachable from tests too.
 #
 # URL is assumed to be the last argv per cf_api's call convention
 # (curl -sS -H ... -H ... [EXTRA] "$CF_API_BASE$path").
@@ -25,12 +32,13 @@ url="${!#}"
 
 mocks="$BATS_TEST_TMPDIR/mocks.txt"
 fixture=""
+best_len=-1
 if [[ -f "$mocks" ]]; then
   while IFS=$'\t' read -r pattern fix; do
     [[ -z "$pattern" ]] && continue
-    if [[ "$url" == *"$pattern"* ]]; then
+    if [[ "$url" == *"$pattern"* ]] && (( ${#pattern} > best_len )); then
+      best_len=${#pattern}
       fixture="$fix"
-      break
     fi
   done < "$mocks"
 fi
