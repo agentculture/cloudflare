@@ -31,7 +31,9 @@ cf_mock() {
 
 cf_assert_called() {
   local pattern="$1"
-  if ! grep -qF "$pattern" "$BATS_TEST_TMPDIR/curl.log" 2>/dev/null; then
+  # `--` separator so patterns starting with `-` (e.g. `-X\tPOST`) aren't
+  # parsed as grep flags.
+  if ! grep -qF -- "$pattern" "$BATS_TEST_TMPDIR/curl.log" 2>/dev/null; then
     echo "expected curl invocation matching '$pattern', got:" >&2
     cat "$BATS_TEST_TMPDIR/curl.log" >&2 || true
     return 1

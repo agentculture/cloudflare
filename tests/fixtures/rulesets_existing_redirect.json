@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "id": "existing-redirect-ruleset-id-0001",
+      "name": "default",
+      "description": "",
+      "kind": "zone",
+      "phase": "http_request_dynamic_redirect",
+      "source": "firewall_custom",
+      "version": "1",
+      "last_updated": "2026-04-01T00:00:00.000000Z",
+      "rules": [
+        {
+          "id": "existing-rule-id-0001",
+          "version": "1",
+          "action": "redirect",
+          "expression": "(http.host eq \"agentculture.org\")",
+          "enabled": true,
+          "ref": "existing-ref",
+          "action_parameters": {
+            "from_value": {
+              "target_url": {"expression": "concat(\"https://culture.dev\", http.request.uri.path)"},
+              "status_code": 301,
+              "preserve_query_string": true
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "result_info": {"page": 1, "per_page": 20, "total_pages": 1, "count": 1, "total_count": 1}
+}

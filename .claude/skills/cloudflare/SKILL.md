@@ -20,8 +20,9 @@ agent-readable markdown table (or key-value list for single-object
 responses) by default, and emits raw JSON with `--json` for bots and
 `jq` pipelines.
 
-No write operations yet — this is the inventory half of the skill.
-Write operations land here later in the same directory.
+**Read-only.** For create / update / delete, use the companion
+[`cloudflare-write`](../cloudflare-write/SKILL.md) skill — it lives
+next to this one and shares `_lib.sh` via symlink.
 
 ## 1. Pre-flight
 

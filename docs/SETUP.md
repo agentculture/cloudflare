@@ -53,6 +53,32 @@ account**. Scoping to a single zone is the most common setup mistake —
 it silently passes `cf-zones.sh` (account-level) while failing every
 per-zone call with the same `code 10000` error.
 
+### 1.5 Write-ops token (optional, for the `cloudflare-write` skill)
+
+The table above lists **Read** scopes only. Scripts in the companion
+`cloudflare-write` skill (create / update / delete operations) need
+**Edit** scopes, which are intentionally gated behind a separate
+token.
+
+Create a **second** token — keep it distinct from your read token so
+the mutating credential isn't lying around on machines that only need
+inventory access. Suggested name: `claudeflare-write`. Give it every
+scope from the Read table above (so `cf-whoami.sh` / `cf-zones.sh`
+still work) **plus** the Edit scopes below. Scope to the AgentCulture
+account and "All zones from an account" exactly like the read token.
+
+| Scope (CloudFlare dashboard label)       | Level | Access | Powers                                                             |
+|------------------------------------------|-------|--------|--------------------------------------------------------------------|
+| **Zone · Dynamic Redirect** (All zones)  | Zone  | Edit   | `cf-redirect-create.sh` — creates the zone-level Single Redirect ruleset |
+
+Swap tokens by editing `.env`'s `CLOUDFLARE_API_TOKEN` when you're
+about to run a write script, then swap back. `.env` only stores one
+token at a time; there is no per-script token selection.
+
+You do not need this token to follow the rest of this guide, develop
+read scripts, or run the test suite — the bats harness mocks `curl`
+and never touches the live API.
+
 ## 2. Find the account ID
 
 The account ID is required for account-scoped endpoints (Workers,
@@ -100,6 +126,20 @@ bash .claude/skills/cloudflare/scripts/cf-status.sh
 - `cf-status.sh` exercises every remaining scope (DNS, Workers
   Scripts, Workers Routes, Pages) in one shot — if this succeeds, the
   token is fully provisioned.
+
+If you also provisioned a write-ops token (§1.5), swap it into `.env`
+and run a dry-run against a real zone to exercise the Edit scope
+without mutating anything:
+
+```sh
+bash .claude/skills/cloudflare-write/scripts/cf-redirect-create.sh \
+  agentculture.org culture.dev --www
+```
+
+This should print a "Dry-run — no changes applied" banner followed
+by the JSON body it would POST. If it instead errors with
+`code 10000`, the token is missing the **Zone · Dynamic Redirect ·
+Edit** scope (or it's scoped to the wrong zones).
 
 ## 5. Common errors
 
