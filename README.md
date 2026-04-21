@@ -6,7 +6,7 @@ CloudFlare management for the [AgentCulture OSS](https://culture.dev) organizati
 
 1. Copy the env template: `cp .env.example .env`
 2. Provision a CloudFlare API token with the read-only scopes listed in `.env.example`, scoped to the AgentCulture account. Paste the token and your account ID into `.env`.
-3. Verify: `bash .claude/skills/cloudflare/scripts/cf-whoami.sh` — should print `status: active` and the granted scopes.
+3. Verify: `bash .claude/skills/cloudflare/scripts/cf-whoami.sh` — should print a **CloudFlare token** section with the token id, `status: active`, `not_before`, and `expires_on`. (The `/user/tokens/verify` endpoint does not return granted scopes, so those are not printed.)
 
 `.env` is gitignored. Do not commit it.
 
@@ -16,7 +16,7 @@ CloudFlare management for the [AgentCulture OSS](https://culture.dev) organizati
 
 ## Tests
 
-Pipeline tests run in CI on every PR. To run locally:
+Pipeline tests will run in CI on every PR once `.github/workflows/test.yml` lands (Checkpoint C). Today, run them locally:
 
 ```sh
 bash tests/shellcheck.sh   # static analysis across all shell scripts

@@ -6,37 +6,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CloudFlare management for the **AgentCulture OSS** organization, built as Claude Code **skills and subagents** ("ClaudeFlare"). Part of the Culture workspace (see `culture` CLI / <https://culture.dev>). Maintained jointly by agents and one human (Ori Nachum).
 
-Parent workspace context lives in `../CLAUDE.md`. The global workspace uses uv for Python.
+Parent workspace context lives in `../CLAUDE.md`. The global workspace uses uv for Python, but this repo is bash-based (see "Tooling choice" below).
 
-## Current state: pre-scaffold
+## Current state
 
-As of now the repo contains only README, LICENSE, `.gitignore` (Python-flavored), and `.claude/settings.local.json`. There is no build system, test suite, or source tree yet — do not hallucinate commands. The expected layout, once scaffolded, is:
+Phase 1 (read-only skills) is in progress. The repo contains one skill, `cloudflare`, with a verify script (`cf-whoami.sh`) and a bats test harness. Remaining Phase 1 scripts (`cf-zones`, `cf-dns`, `cf-workers`, `cf-pages`) and the CI workflow land in subsequent checkpoints. See `/home/spark/.claude/plans/ethereal-munching-porcupine.md` for the full plan (lives in the owning agent's workspace, not in this repo).
+
+Layout:
 
 ```text
-.claude/skills/cf-dns/        # one skill per CloudFlare resource area
-.claude/skills/cf-workers/
-.claude/skills/cf-pages/
-.claude/skills/cf-account/
-.claude/agents/               # subagents
-lib/                          # shared Python helpers (auth, HTTP, JSON formatting)
+.claude/skills/cloudflare/        # one skill; read-only ops today, write ops will land here
+  SKILL.md                        # (pending — Checkpoint C)
+  scripts/
+    _lib.sh                       # shared helpers: cf_api, cf_output, cf_output_kv, cf_require_account_id
+    cf-whoami.sh                  # verify token status and expiry
+.claude/skills/pr-review/         # vendored from ~/.claude/skills (PR #4)
+tests/
+  bats/                           # bats-core unit tests; PATH-injected curl stub for offline mocking
+  fixtures/                       # canned API responses
 ```
-
-Skills start read-only. Write ops are added to the same per-resource skill when that area graduates.
 
 ## Hard constraints
 
-- **Do not join the culture mesh from this repo.** Ori will signal when it's time. Until then, skills are invoked locally in Claude Code but must be designed as if a mesh peer will call them later: stable CLI interfaces, deterministic JSON output by default, `--human` flag for pretty-print.
-- **Credentials never live in the repo.** The CloudFlare API token lives at `~/.config/cloudflare/token` (mode 600), owned by the dedicated OS user this agent runs as. Env var name is `CLOUDFLARE_API_TOKEN`. A `.env.example` may document the variable name, but `.env` is gitignored and unused for real tokens.
-- **Ownership model:** CloudFlare responsibility is earned through work and can be split across multiple agents by domain or resource area. Skills must therefore be parameterized by zone/account — never hardcode `culture.dev` or a specific account ID in skill logic; take it as an arg or from config.
+- **Do not join the culture mesh from this repo.** Ori will signal when it's time. Until then, skills are invoked locally in Claude Code but must be designed as if a mesh peer will call them later: stable CLI interfaces, deterministic output, structured enough for another agent to parse.
+- **Credentials never live in the repo.** The CloudFlare API token goes in a `.env` file at the repo root (gitignored). `CLOUDFLARE_API_TOKEN` is the env var name; `CLOUDFLARE_ACCOUNT_ID` is also expected for account-scoped endpoints. `_lib.sh` loads `.env` on import with a safe `KEY=VALUE` parser — no `source`, no shell execution.
+- **Ownership model:** CloudFlare responsibility is earned through work and can be split across multiple agents by domain or resource area. Skills must therefore be parameterized by zone/account — never hardcode `culture.dev` or a specific account ID in skill logic; take it as an arg or from env.
 
 ## Tooling choice
 
-REST API via a thin Python wrapper (`httpx`, managed with `uv`). CLI (`wrangler`) and the official SDK are both acceptable for one-off cases, but the default skill implementation uses REST for a uniform surface across DNS/Workers/Pages/account and to avoid stateful `wrangler login` under a dedicated OS user.
+Bash + `curl` + `jq`, no runtime Python deps. Matches the house style in `culture/` and `citation-cli/`. `wrangler` CLI and the official SDK are acceptable for one-off needs, but skills should default to REST via `curl` for a uniform surface across DNS/Workers/Pages/account and to avoid stateful `wrangler login` under a dedicated agent user.
+
+## Output conventions
+
+- **Default:** markdown — tables for list data (pipe-delimited with `| --- |` separator rows), markdown key-value (`- **key:** value`) for single-object data. This is agent-readable, renders anywhere, and stays grep-able.
+- **`--json` flag on every script:** raw API JSON passthrough for bots, scripts, and `jq` pipelines.
 
 ## Roadmap
 
 1. **Phase 1 — read-only skills** for the `culture.dev` zone. Verify auth end-to-end by listing zones first (cheapest call). Then DNS records, Workers scripts/routes, Pages projects/deployments.
-2. **Phase 2 — agentirc.dev Pages cleanup.** `agentirc.dev` is deprecated and folded into `culture.dev/agentirc` with a redirect. The orphaned Pages deployment needs a documented removal plan, then execution.
+2. **Phase 2 — `agentirc.dev` Pages cleanup.** `agentirc.dev` is deprecated and folded into `culture.dev/agentirc` with a redirect. The orphaned Pages deployment needs a documented removal plan, then execution.
 3. **Later:** write ops, multi-domain support, mesh integration, expansion to R2 / Access / Zero Trust and potentially mixed CloudFlare–AWS workflows.
 
 ## Active design context
