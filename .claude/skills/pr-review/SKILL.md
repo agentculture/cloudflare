@@ -13,21 +13,41 @@ Fetch, reply to, and resolve PR review comments via `gh` CLI.
 
 ## When to Use
 
-- Before fixing PR review comments (fetch first to understand them)
-- After fixing issues flagged in a PR review (reply and resolve)
-- When the user asks to handle, respond to, or resolve PR comments
+- **Immediately after creating a PR** (e.g. after `gh pr create`): start polling the PR for automated-reviewer activity without waiting for the user to ask — see [Auto-poll after PR creation](#auto-poll-after-pr-creation) below.
+- Before fixing PR review comments (fetch first to understand them).
+- After fixing issues flagged in a PR review (reply and resolve).
+- When the user asks to handle, respond to, or resolve PR comments.
+
+## Auto-poll after PR creation
+
+When a new PR has just been created, do **not** wait for the user to say "check for comments." Hand off to the `poll` skill (project-local) with the new PR number:
+
+```text
+Skill poll   args: "PR_NUMBER"
+```
+
+`poll` spawns a background subagent that runs `pr-comments.sh` every 60 seconds and notifies the main session ONLY when both qodo and Copilot have posted their full reviews (or the PR is merged/closed). The main session does not wake on heartbeats — it only pays context once, when the wait is over.
+
+When the subagent's notification arrives, refetch via `pr-comments.sh` and run this skill to triage, fix, push, reply, and resolve.
+
+The user can interrupt the background poller at any time with "stop" / "cancel" / "that's enough."
 
 ## Workflow
 
 ### 1. Fetch comments
 
-Read all PR feedback before acting. One call returns inline review comments,
-issue comments (qodo code reviews, sonarcloud quality gate, etc.), and
-top-level review bodies (copilot overviews):
+**Always use `pr-comments.sh` as the single entry point.** It fetches everything in one call: inline review comments (with thread resolve status), issue comments (qodo summaries + sonarcloud quality-gate), top-level review bodies (copilot overviews), **and** SonarCloud new issues from the public API. Do not hand-roll separate `gh api` or `curl https://sonarcloud.io/...` calls — the script already does it.
 
 ```bash
 bash .claude/skills/pr-review/scripts/pr-comments.sh PR_NUMBER
 ```
+
+Sections the script prints, in order:
+
+1. `INLINE REVIEW COMMENTS` — file/line comments with thread IDs (resolvable via `pr-reply.sh` / `pr-batch.sh`).
+2. `ISSUE COMMENTS` — general PR comments (qodo review summary + bug list, SonarCloud quality-gate bot comment).
+3. `TOP-LEVEL REVIEWS` — PR-level review bodies (Copilot's overview).
+4. `SONARCLOUD NEW ISSUES` — issues from sonarcloud.io filtered to this PR. Silently skipped if the project isn't registered on SonarCloud. Project key is derived from `<owner>_<repo>`; override with `SONAR_PROJECT_KEY=<key>` for non-standard naming.
 
 ### 2. Triage
 
@@ -61,15 +81,12 @@ bash .claude/skills/pr-review/scripts/pr-reply.sh --resolve PR_NUMBER COMMENT_ID
 
 ### pr-comments.sh
 
-Fetch and display all PR feedback in one pass, grouped into three sections:
+Fetch and display all PR feedback in one pass, grouped into four sections:
 
-1. **Inline review comments** — file/line comments on the diff, with thread
-   resolve status and thread ID (these are what `pr-reply.sh` acts on).
-2. **Issue comments** — general PR comments (qodo summary + code review,
-   sonarcloud quality gate, cloudflare pages deploy preview, etc.).
-3. **Top-level reviews** — PR-level review bodies with content (e.g. copilot
-   PR overviews). Reviews whose only content is inline comments are skipped
-   to avoid duplicating section 1.
+1. **Inline review comments** — file/line comments on the diff, with thread resolve status and thread ID (these are what `pr-reply.sh` acts on).
+2. **Issue comments** — general PR comments (qodo summary + code review, sonarcloud quality-gate, cloudflare pages deploy preview, etc.).
+3. **Top-level reviews** — PR-level review bodies with content (e.g. copilot PR overviews). Reviews whose only content is inline comments are skipped to avoid duplicating section 1.
+4. **SonarCloud new issues** — fetched from `sonarcloud.io/api/issues/search`. Silently skipped when the project isn't on SonarCloud (API returns no `issues` field). Project key defaults to the GitHub `<owner>_<repo>` convention; override via `SONAR_PROJECT_KEY` env var.
 
 ```bash
 bash .claude/skills/pr-review/scripts/pr-comments.sh [--repo OWNER/REPO] PR_NUMBER

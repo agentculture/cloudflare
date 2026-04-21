@@ -165,6 +165,9 @@ dmypy.json
 # pytype static type analyzer
 .pytype/
 
+# Claude Code scheduled-task state
+.claude/scheduled_tasks.lock
+
 # Cython debug symbols
 cython_debug/
 

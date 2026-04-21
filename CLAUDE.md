@@ -66,6 +66,24 @@ Bash + `curl` + `jq`, no runtime Python deps. Matches the house style in `cultur
 - **Agent-readable default, `--json` opt-in.** Markdown tables for lists, markdown key-value for single objects, raw JSON only when explicitly requested.
 - **Every new script ships with a bats file under `tests/bats/` and at least one fixture under `tests/fixtures/`.** CI runs them all on every PR.
 
+## PR workflow
+
+All work goes through a feature branch + PR + automated review cycle (qodo, Copilot, SonarCloud). The vendored `pr-review` skill at `.claude/skills/pr-review/` owns the details — read its `SKILL.md` for the full workflow. Four cheat-sheet points:
+
+- **Before you start: pull latest `main` and fork the branch from there.**
+
+  ```sh
+  git fetch origin
+  git switch main && git pull --ff-only
+  git switch -c feat/<short-descriptive-name>
+  ```
+
+  Do this even if you think you're up to date. PRs in this repo squash-merge, which collapses their commits into a single new commit on `main`; any branch forked before that squash still carries the original commits and will hit spurious add/add conflicts on rebase. Starting fresh from the latest `main` avoids the whole class of problem.
+
+- **After `gh pr create`, immediately invoke the `poll` skill.** It spawns a background subagent that watches the PR and notifies you only when both qodo and Copilot have finished. Cheaper than self-paced wakeups because the main session doesn't burn context on heartbeats. See `.claude/skills/poll/SKILL.md`.
+- **Fetch ALL review feedback with one call:** `bash .claude/skills/pr-review/scripts/pr-comments.sh <PR>`. It returns inline comments, issue comments, top-level reviews, and SonarCloud new issues in a single pass — don't hand-roll `gh api` / `curl sonarcloud.io` calls.
+- **Triage / reply / resolve** via the `pr-review` skill once the poll wakes you.
+
 ## Active design context
 
 Live design decisions (scope, auth shape, skill layout, phase-1 targets) are tracked in `/home/spark/.claude/projects/-home-spark-git-cloudflare/memory/` — read `MEMORY.md` there at the start of a session if you need the current state of the conversation's working agreements.
