@@ -193,4 +193,5 @@ cf_api_paginated() {
     --argjson results "$all_results" \
     --argjson info "$last_info" \
     '{success: true, errors: [], messages: [], result: $results, result_info: ($info + {page: 1, total_pages: 1, count: ($results | length), total_count: ($results | length)})}'
+  return 0
 }
