@@ -114,8 +114,9 @@ bash .claude/skills/cloudflare/scripts/cf-dns.sh culture.dev --json | jq '.resul
 
 Pagination: handled transparently for every list endpoint via
 `cf_api_paginated` in `_lib.sh`. You get every page concatenated into
-one `.result` array; override the per-page size with
-`CF_PAGE_SIZE=25 cf-zones.sh` if needed.
+one `.result` array; override the per-page size by exporting
+`CF_PAGE_SIZE` in the environment of any script invocation, e.g.
+`CF_PAGE_SIZE=25 bash .claude/skills/cloudflare/scripts/cf-zones.sh`.
 
 ## 6. What this skill does NOT do (yet)
 

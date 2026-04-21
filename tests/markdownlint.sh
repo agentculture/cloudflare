@@ -15,7 +15,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 if ! command -v markdownlint-cli2 >/dev/null 2>&1; then
   echo "ERROR: markdownlint-cli2 is not installed." >&2
-  echo "Install with: npm install -g markdownlint-cli2" >&2
+  echo "Install with: npm install -g markdownlint-cli2@0.21.0  # same version CI pins" >&2
   exit 127
 fi
 
