@@ -18,38 +18,59 @@ while [[ $# -gt 0 ]]; do
 done
 
 PR_NUMBER="${1:?Usage: pr-comments.sh [--repo OWNER/REPO] PR_NUMBER}"
+[[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "ERROR: PR_NUMBER must be a positive integer, got: $PR_NUMBER" >&2; exit 2; }
 
 if [[ -z "$REPO" ]]; then
     REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 fi
 
 # ── Section 1: inline review comments ─────────────────────────────────────
-THREADS_JSON=$(gh api graphql -f query="
+# Fetch ALL comments per thread (not just the root) so reply comments can
+# still be mapped back to their thread and resolved. For realistic PRs,
+# `comments(first: 100)` is enough; a warning is emitted below if the
+# reviewThreads page is also capped.
+THREADS_RAW=$(gh api graphql -f query="
 {
   repository(owner: \"${REPO%%/*}\", name: \"${REPO##*/}\") {
     pullRequest(number: $PR_NUMBER) {
       reviewThreads(first: 100) {
+        pageInfo { hasNextPage }
         nodes {
           id
           isResolved
-          comments(first: 1) {
+          comments(first: 100) {
+            pageInfo { hasNextPage }
             nodes { databaseId }
           }
         }
       }
     }
   }
-}" --jq '.data.repository.pullRequest.reviewThreads.nodes')
+}")
 
+THREADS_HAS_MORE=$(echo "$THREADS_RAW" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')
+if [[ "$THREADS_HAS_MORE" == "true" ]]; then
+    echo "Warning: PR has >100 review threads; some threads may not appear below." >&2
+fi
+
+THREADS_JSON=$(echo "$THREADS_RAW" | jq '.data.repository.pullRequest.reviewThreads.nodes')
+
+# Flatten: one entry per (comment_id, thread_id, resolved) so EVERY comment
+# in the thread maps to its thread — not just the root. This is what
+# lets callers look up the thread for a reply comment.
 THREAD_MAP=$(echo "$THREADS_JSON" | jq -r '
-  [.[] | {
-    comment_id: .comments.nodes[0].databaseId,
-    thread_id: .id,
-    resolved: .isResolved
+  [.[] | . as $t | .comments.nodes[] | {
+    comment_id: .databaseId,
+    thread_id: $t.id,
+    resolved: $t.isResolved
   }]
 ')
 
-INLINE=$(gh api "repos/$REPO/pulls/$PR_NUMBER/comments" --paginate)
+# gh api --paginate concatenates multiple JSON arrays (one per page) into
+# its output. jq -s slurps them into an array-of-arrays; `add` flattens
+# to a single array so length / iteration are correct regardless of page
+# count.
+INLINE=$(gh api "repos/$REPO/pulls/$PR_NUMBER/comments" --paginate | jq -s 'add // []')
 INLINE_COUNT=$(echo "$INLINE" | jq 'length')
 
 echo "════════════════ INLINE REVIEW COMMENTS ($INLINE_COUNT) ════════════════"
@@ -67,7 +88,7 @@ echo "$INLINE" | jq -r --argjson threads "$THREAD_MAP" '
 '
 
 # ── Section 2: issue comments (general PR comments) ───────────────────────
-ISSUE=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate)
+ISSUE=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate | jq -s 'add // []')
 ISSUE_COUNT=$(echo "$ISSUE" | jq 'length')
 
 echo ""
@@ -82,7 +103,7 @@ echo "$ISSUE" | jq -r '
 '
 
 # ── Section 3: top-level reviews with a body ──────────────────────────────
-REVIEWS=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate)
+REVIEWS=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate | jq -s 'add // []')
 REVIEWS_WITH_BODY=$(echo "$REVIEWS" | jq '[.[] | select((.body // "") != "")]')
 REVIEW_COUNT=$(echo "$REVIEWS_WITH_BODY" | jq 'length')
 

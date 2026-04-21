@@ -17,15 +17,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 PR_NUMBER="${1:?Usage: pr-batch.sh [--repo OWNER/REPO] [--resolve] PR_NUMBER < input.jsonl}"
+[[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "ERROR: PR_NUMBER must be a positive integer, got: $PR_NUMBER" >&2; exit 2; }
 
 if [[ -z "$REPO" ]]; then
     REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RESOLVE_FLAG=""
+
+# Build optional flags as an array so pr-reply.sh receives exactly the
+# intended arguments — an unquoted empty var would add a stray "" arg
+# which shellcheck SC2086 flags and which can behave unpredictably.
+EXTRA_ARGS=()
 if [[ "$RESOLVE" == true ]]; then
-    RESOLVE_FLAG="--resolve"
+    EXTRA_ARGS+=(--resolve)
 fi
 
 SUCCESS=0
@@ -45,7 +50,7 @@ while IFS= read -r line; do
     fi
 
     echo "--- Comment $COMMENT_ID ---"
-    if bash "$SCRIPT_DIR/pr-reply.sh" --repo "$REPO" $RESOLVE_FLAG "$PR_NUMBER" "$COMMENT_ID" "$BODY"; then
+    if bash "$SCRIPT_DIR/pr-reply.sh" --repo "$REPO" "${EXTRA_ARGS[@]}" "$PR_NUMBER" "$COMMENT_ID" "$BODY"; then
         ((SUCCESS++)) || true
     else
         echo "FAILED: comment $COMMENT_ID"
