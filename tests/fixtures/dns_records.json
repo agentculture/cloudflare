@@ -1,0 +1,53 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "id": "dns-rec-apex-a-0000000000000001",
+      "type": "A",
+      "name": "culture.dev",
+      "content": "192.0.2.10",
+      "proxiable": true,
+      "proxied": true,
+      "ttl": 1,
+      "created_on": "2025-11-01T12:00:00.000000Z",
+      "modified_on": "2026-01-15T10:00:00.000000Z"
+    },
+    {
+      "id": "dns-rec-www-cname-0000000000000002",
+      "type": "CNAME",
+      "name": "www.culture.dev",
+      "content": "culture.dev",
+      "proxiable": true,
+      "proxied": true,
+      "ttl": 1,
+      "created_on": "2025-11-01T12:01:00.000000Z",
+      "modified_on": "2026-01-15T10:00:00.000000Z"
+    },
+    {
+      "id": "dns-rec-mx-0000000000000003",
+      "type": "MX",
+      "name": "culture.dev",
+      "content": "mx.example.com",
+      "priority": 10,
+      "proxiable": false,
+      "proxied": false,
+      "ttl": 3600,
+      "created_on": "2025-11-01T12:02:00.000000Z",
+      "modified_on": "2025-11-01T12:02:00.000000Z"
+    },
+    {
+      "id": "dns-rec-spf-txt-0000000000000004",
+      "type": "TXT",
+      "name": "culture.dev",
+      "content": "v=spf1 include:_spf.example.com -all",
+      "proxiable": false,
+      "proxied": false,
+      "ttl": 1,
+      "created_on": "2025-11-01T12:03:00.000000Z",
+      "modified_on": "2025-11-01T12:03:00.000000Z"
+    }
+  ],
+  "result_info": {"page": 1, "per_page": 100, "total_pages": 1, "count": 4, "total_count": 4}
+}
