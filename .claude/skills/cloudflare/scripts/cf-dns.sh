@@ -43,9 +43,13 @@ fi
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# Step 1: resolve zone name → id. Zone names are DNS labels (letters,
-# digits, dots, hyphens) so they don't need URL encoding.
-lookup=$(cf_api "/zones?name=$zone")
+# Step 1: resolve zone name → id. URL-encode the zone argument before
+# interpolating so a caller passing an unusual character (e.g. `&` or
+# `?`) can't inject extra query parameters. jq's @uri matches RFC 3986
+# unreserved chars, so ordinary DNS labels (culture.dev) pass through
+# unchanged.
+zone_encoded=$(jq -rn --arg v "$zone" '$v|@uri')
+lookup=$(cf_api "/zones?name=$zone_encoded")
 zone_id=$(printf '%s' "$lookup" | jq -r '.result[0].id // empty')
 if [[ -z "$zone_id" ]]; then
   echo "ERROR: zone '$zone' not found in the configured account." >&2

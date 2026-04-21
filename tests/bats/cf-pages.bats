@@ -90,3 +90,11 @@ setup() {
   [ "$status" -eq 2 ]
   [[ "$output" == *"unexpected extra argument"* ]]
 }
+
+@test "cf-pages.sh URL-encodes the project argument so '/' cannot alter the path" {
+  cf_mock "/deployments" "pages_deployments.json"
+  cf_mock "/pages/projects" "pages_projects.json"
+  run bash "$SKILL_SCRIPTS/cf-pages.sh" 'has/slash'
+  # Slash must be encoded as %2F so it stays in the project segment
+  cf_assert_called "/pages/projects/has%2Fslash/deployments"
+}

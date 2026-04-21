@@ -55,7 +55,12 @@ if [[ -z "$project" ]]; then
     '.result[] | [.name, (.production_branch // "—"), (.subdomain // "—"), (.latest_deployment.created_on // "—")] | @tsv' \
     "$(printf 'NAME\tBRANCH\tSUBDOMAIN\tLATEST')"
 else
-  response=$(cf_api_paginated "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project/deployments")
+  # URL-encode the project argument so an unusual character (space,
+  # `/`, `?`, `#`) cannot alter the request path. CloudFlare Pages
+  # project names are normally safe, but the encoding is cheap
+  # insurance.
+  project_encoded=$(jq -rn --arg v "$project" '$v|@uri')
+  response=$(cf_api_paginated "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project_encoded/deployments")
 
   if [[ "$mode" == "md" ]]; then
     count=$(printf '%s' "$response" | jq -r '.result | length')

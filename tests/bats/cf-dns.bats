@@ -64,3 +64,11 @@ setup() {
   [ "$status" -eq 2 ]
   [[ "$output" == *"unexpected extra argument"* ]]
 }
+
+@test "cf-dns.sh URL-encodes the zone argument so '&' cannot inject query params" {
+  cf_mock "/zones?name=" "zone_lookup.json"
+  cf_mock "/dns_records" "dns_records.json"
+  run bash "$SKILL_SCRIPTS/cf-dns.sh" 'evil.com&status=active'
+  # The encoded request URL should contain %26, NOT the literal &status=
+  cf_assert_called "evil.com%26status%3Dactive"
+}
