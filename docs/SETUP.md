@@ -26,7 +26,8 @@ This guide walks you through:
 6. Under **Zone Resources**, select **Include → All zones from an
    account → AgentCulture**. *This matters* — scoping Zone resources
    to a single zone (e.g. only `culture.dev`) causes
-   `code 10000 Authentication error` on the other 16 zones.
+   `code 10000 Authentication error` on every other zone in the
+   account.
 7. Leave **Client IP Address Filtering** empty and **TTL** at "Never
    expire" unless you have a reason to rotate.
 8. **Continue to summary** → **Create Token**. Copy the token *now* —
@@ -43,7 +44,7 @@ needs the union of everything (it calls all the others).
 | **Account · Workers Scripts**          | Account | Read   | `cf-workers.sh`                                            |
 | **Account · Cloudflare Pages**         | Account | Read   | `cf-pages.sh` (list projects + deployments)                |
 | **Account · Account Analytics**        | Account | Read   | Optional — useful for future state checks                  |
-| **Zone · Zone** (All zones in account) | Zone    | Read   | `cf-zones.sh`, enumeration step inside `cf-workers-routes` |
+| **Zone · Zone** (All zones in account) | Zone    | Read   | `cf-zones.sh`, enumeration step inside `cf-workers-routes.sh` |
 | **Zone · DNS** (All zones in account)  | Zone    | Read   | `cf-dns.sh <zone>`                                         |
 | **Zone · Workers Routes** (All zones)  | Zone    | Read   | `cf-workers-routes.sh`                                     |
 
@@ -119,7 +120,7 @@ CloudFlare returns this when the token *is* valid but *lacks the
 specific scope* the endpoint requires, or the scope is attached to the
 wrong account/zone. In this repo the failure mode is almost always:
 
-| Script failing with 10000       | Missing / misscoped                                  |
+| Script failing with 10000       | Missing / mis-scoped                                 |
 |---------------------------------|------------------------------------------------------|
 | `cf-dns.sh <zone>`              | **Zone · DNS · Read**, scoped to "All zones"         |
 | `cf-workers-routes.sh`          | **Zone · Workers Routes · Read**, scoped to "All zones" |
