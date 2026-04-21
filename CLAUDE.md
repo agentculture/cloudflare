@@ -10,21 +10,32 @@ Parent workspace context lives in `../CLAUDE.md`. The global workspace uses uv f
 
 ## Current state
 
-Phase 1 (read-only skills) is in progress. The repo contains one skill, `cloudflare`, with a verify script (`cf-whoami.sh`) and a bats test harness. Remaining Phase 1 scripts (`cf-zones`, `cf-dns`, `cf-workers`, `cf-pages`) and the CI workflow land in subsequent checkpoints. See `/home/spark/.claude/plans/ethereal-munching-porcupine.md` for the full plan (lives in the owning agent's workspace, not in this repo).
+Phase 1 (read-only skills) is complete. See `.claude/skills/cloudflare/SKILL.md` for the user-facing skill documentation (what each script does, when it runs, how to add new read scripts).
 
 Layout:
 
 ```text
 .claude/skills/cloudflare/        # one skill; read-only ops today, write ops will land here
-  SKILL.md                        # (pending — Checkpoint C)
+  SKILL.md                        # user-facing skill instructions + trigger phrases
   scripts/
-    _lib.sh                       # shared helpers: cf_api, cf_output, cf_output_kv, cf_require_account_id
+    _lib.sh                       # shared helpers: env load, cf_api, cf_api_paginated,
+                                  # cf_output, cf_output_kv, cf_require_account_id
     cf-whoami.sh                  # verify token status and expiry
-.claude/skills/pr-review/         # vendored from ~/.claude/skills (PR #4)
+    cf-zones.sh                   # list zones the token can see
+    cf-dns.sh ZONE                # list DNS records for a zone (resolves name → id)
+    cf-workers.sh                 # list Workers scripts in the account
+    cf-workers-routes.sh          # aggregate Workers routes across every zone
+    cf-pages.sh [PROJECT]         # list Pages projects (or a project's deployments)
+.claude/skills/pr-review/         # vendored from ~/.claude/skills — fetch/reply/resolve PR comments
 tests/
   bats/                           # bats-core unit tests; PATH-injected curl stub for offline mocking
   fixtures/                       # canned API responses
+  shellcheck.sh                   # shellcheck every shell script in the repo
+  markdownlint.sh                 # markdownlint-cli2 every .md file in the repo
+.github/workflows/test.yml        # CI: shellcheck + markdownlint + bats on every PR
 ```
+
+Pagination is transparent: `cf_api_paginated` in `_lib.sh` walks every page of a list endpoint so scripts see one aggregated `.result`. `shopt -s inherit_errexit` is enabled in `_lib.sh` so `exit 1` inside `cf_api` propagates through the `$(...)` layer `cf_api_paginated` adds — removing this breaks error-path tests silently.
 
 ## Hard constraints
 
@@ -43,9 +54,17 @@ Bash + `curl` + `jq`, no runtime Python deps. Matches the house style in `cultur
 
 ## Roadmap
 
-1. **Phase 1 — read-only skills** for the `culture.dev` zone. Verify auth end-to-end by listing zones first (cheapest call). Then DNS records, Workers scripts/routes, Pages projects/deployments.
-2. **Phase 2 — `agentirc.dev` Pages cleanup.** `agentirc.dev` is deprecated and folded into `culture.dev/agentirc` with a redirect. The orphaned Pages deployment needs a documented removal plan, then execution.
-3. **Later:** write ops, multi-domain support, mesh integration, expansion to R2 / Access / Zero Trust and potentially mixed CloudFlare–AWS workflows.
+1. **Phase 1 — read-only skills** ✓ Done. All six scripts (`cf-whoami`, `cf-zones`, `cf-dns`, `cf-workers`, `cf-workers-routes`, `cf-pages`) plus pagination, CI, and docs.
+2. **Phase 2 — `agentirc.dev` Pages cleanup.** `agentirc.dev` is deprecated and folded into `culture.dev/agentirc` with a redirect. Phase 1's `cf-pages.sh` and `cf-workers-routes.sh` are the inventory tools for the removal plan; Phase 2 introduces the first write operations (delete endpoints).
+3. **Later:** multi-domain support, mesh integration, expansion to R2 / Access / Zero Trust, and potentially mixed CloudFlare–AWS workflows.
+
+## Conventions for adding code
+
+- **Names, not IDs.** Scripts accept domain / project / script names and resolve to IDs internally (e.g. `cf-dns.sh culture.dev`, not a zone id). One extra API call is the price of ergonomics.
+- **URL-encode any user-supplied argument** before interpolating into a URL (`jq -rn --arg v "$input" '$v|@uri'`).
+- **Every list script uses `cf_api_paginated`.** Single-object endpoints (e.g. `/user/tokens/verify`) use `cf_api` directly.
+- **Agent-readable default, `--json` opt-in.** Markdown tables for lists, markdown key-value for single objects, raw JSON only when explicitly requested.
+- **Every new script ships with a bats file under `tests/bats/` and at least one fixture under `tests/fixtures/`.** CI runs them all on every PR.
 
 ## Active design context
 
