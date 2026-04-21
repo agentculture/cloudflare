@@ -16,13 +16,14 @@ CloudFlare management for the [AgentCulture OSS](https://culture.dev) organizati
 
 ## Tests
 
-Pipeline tests will run in CI on every PR once `.github/workflows/test.yml` lands (Checkpoint C). Today, run them locally:
-
 ```sh
-bash tests/shellcheck.sh   # static analysis across all shell scripts
-bats tests/bats/           # unit tests (mocked curl, real jq, no live token required)
+bash tests/shellcheck.sh     # static analysis across all shell scripts
+bash tests/markdownlint.sh   # lint every markdown file against .markdownlint-cli2.yaml
+bats tests/bats/             # unit tests (mocked curl, real jq, no live token required)
 ```
 
-Required tools on the developer machine: `bash`, `curl`, `jq`, `shellcheck`, `bats`.
+All three run in CI on every PR (see `.github/workflows/test.yml`).
+
+Required tools on the developer machine: `bash`, `curl`, `jq`, `shellcheck`, `bats`, `markdownlint-cli2`.
 
 See `CLAUDE.md` for architecture, constraints, and the phase roadmap.
