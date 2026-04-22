@@ -1,0 +1,8 @@
+{
+  "success": false,
+  "errors": [
+    {"code": 8000030, "message": "This deployment is currently active and cannot be deleted without force=true."}
+  ],
+  "messages": [],
+  "result": null
+}

@@ -67,10 +67,11 @@ scope from the Read table above (so `cf-whoami.sh` / `cf-zones.sh`
 still work) **plus** the Edit scopes below. Scope to the AgentCulture
 account and "All zones from an account" exactly like the read token.
 
-| Scope (CloudFlare dashboard label)       | Level | Access | Powers                                                                   |
-|------------------------------------------|-------|--------|--------------------------------------------------------------------------|
-| **Zone · Single Redirect** (All zones)  | Zone  | Edit   | `cf-redirect-create.sh` — creates the zone-level Single Redirect ruleset |
-| **Zone · DNS** (All zones)               | Zone  | Edit   | `cf-dns-create.sh` — creates a DNS record (A / AAAA / CNAME / TXT / MX / …) |
+| Scope (CloudFlare dashboard label)       | Level   | Access | Powers                                                                   |
+|------------------------------------------|---------|--------|--------------------------------------------------------------------------|
+| **Zone · Single Redirect** (All zones)  | Zone    | Edit   | `cf-redirect-create.sh` — creates the zone-level Single Redirect ruleset |
+| **Zone · DNS** (All zones)               | Zone    | Edit   | `cf-dns-create.sh` — creates a DNS record (A / AAAA / CNAME / TXT / MX / …) |
+| **Account · Cloudflare Pages**           | Account | Edit   | `cf-pages-deployment-delete.sh`, `cf-pages-deployments-purge.sh` — delete Pages deployments |
 
 Swap tokens by editing `.env`'s `CLOUDFLARE_API_TOKEN` when you're
 about to run a write script, then swap back. `.env` only stores one

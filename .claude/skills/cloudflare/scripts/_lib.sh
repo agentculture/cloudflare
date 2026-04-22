@@ -166,20 +166,36 @@ cf_require_account_id() {
 #   { result: [...], result_info: {page, per_page, total_pages, ...} }.
 # Do NOT call it on single-object endpoints (e.g. /user/tokens/verify) —
 # use cf_api directly there.
+#
+# Accumulates page results into a temp file so that neither argv nor
+# a bash variable ever holds the full (potentially multi-MB) combined
+# array — on the agentirc-dev Pages project (138 deployments @ ~2 KB
+# each) the old `jq -s 'add' <(printf …)` pattern blew past ARG_MAX
+# around page 10 with "Argument list too long".
 cf_api_paginated() {
   local path="$1"
   local per_page="${CF_PAGE_SIZE:-50}"
   local separator="?"
   [[ "$path" == *"?"* ]] && separator="&"
 
-  local page=1
-  local all_results='[]'
-  local response page_results total_pages last_info='{}'
+  # Bare `mktemp` (no template) works on GNU coreutils but BSD / macOS
+  # `mktemp` requires either a template argument or `-t`. Pass an
+  # explicit template so this stays portable.
+  local tmp
+  tmp=$(mktemp "${TMPDIR:-/tmp}/cf_api_paginated.XXXXXX")
+  # shellcheck disable=SC2064  # $tmp expanded at trap-set time (intentional)
+  trap "rm -f '$tmp' '$tmp.next'" RETURN
+  printf '[]' > "$tmp"
 
+  local page=1 response page_results total_pages last_info='{}'
   while :; do
     response=$(cf_api "${path}${separator}per_page=${per_page}&page=${page}")
     page_results=$(printf '%s' "$response" | jq '.result // []')
-    all_results=$(jq -s 'add' <(printf '%s' "$all_results") <(printf '%s' "$page_results"))
+    # Accumulated set comes in via file (bounded by disk); single page
+    # comes in via process substitution (bounded by CF_PAGE_SIZE, so
+    # well under ARG_MAX even at per_page=50).
+    jq -s 'add' "$tmp" <(printf '%s' "$page_results") > "$tmp.next"
+    mv "$tmp.next" "$tmp"
     total_pages=$(printf '%s' "$response" | jq -r '.result_info.total_pages // 1')
     last_info=$(printf '%s' "$response" | jq '.result_info // {}')
     if (( page >= total_pages )); then
@@ -188,10 +204,16 @@ cf_api_paginated() {
     ((page++))
   done
 
+  # --slurpfile keeps the final build memory-bounded — the combined
+  # array stays on disk until jq streams it into the synthetic envelope.
   # shellcheck disable=SC2016  # single-quoted jq filter
   jq -n \
-    --argjson results "$all_results" \
+    --slurpfile results "$tmp" \
     --argjson info "$last_info" \
-    '{success: true, errors: [], messages: [], result: $results, result_info: ($info + {page: 1, total_pages: 1, count: ($results | length), total_count: ($results | length)})}'
+    '{success: true, errors: [], messages: [],
+      result: ($results[0] // []),
+      result_info: ($info + {page: 1, total_pages: 1,
+                              count: ($results[0] // [] | length),
+                              total_count: ($results[0] // [] | length)})}'
   return 0
 }

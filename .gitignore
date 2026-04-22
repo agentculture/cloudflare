@@ -168,6 +168,9 @@ dmypy.json
 # Claude Code scheduled-task state
 .claude/scheduled_tasks.lock
 
+# cf-pages-deployments-purge manifests (operational scratch, per-run)
+.cf-purge-manifests/
+
 # Cython debug symbols
 cython_debug/
 

@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": {
+    "name": "agentirc-dev",
+    "id": "proj-id-agentirc-dev",
+    "subdomain": "agentirc-dev.pages.dev",
+    "domains": ["agentirc-dev.pages.dev"],
+    "production_branch": "main",
+    "canonical_deployment": {
+      "id": "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+      "short_id": "aaaaaaaa",
+      "environment": "production",
+      "url": "https://aaaaaaaa.agentirc-dev.pages.dev",
+      "created_on": "2025-09-01T08:00:00.000000Z"
+    },
+    "latest_deployment": {
+      "id": "ffffffff-ffff-4fff-ffff-ffffffffffff",
+      "short_id": "ffffffff",
+      "environment": "production",
+      "url": "https://ffffffff.agentirc-dev.pages.dev",
+      "created_on": "2026-04-21T12:18:20.879820Z"
+    }
+  }
+}
