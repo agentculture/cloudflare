@@ -1,0 +1,52 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": [
+    {
+      "id": "cccccccc-cccc-4ccc-cccc-cccccccccccc",
+      "short_id": "cccccccc",
+      "project_id": "proj-id-agentirc-dev",
+      "project_name": "agentirc-dev",
+      "environment": "preview",
+      "url": "https://cccccccc.agentirc-dev.pages.dev",
+      "created_on": "2026-04-22T00:00:00.000000Z",
+      "modified_on": "2026-04-22T00:05:00.000000Z",
+      "latest_stage": {"name": "deploy", "status": "success"}
+    },
+    {
+      "id": "ffffffff-ffff-4fff-ffff-ffffffffffff",
+      "short_id": "ffffffff",
+      "project_id": "proj-id-agentirc-dev",
+      "project_name": "agentirc-dev",
+      "environment": "production",
+      "url": "https://ffffffff.agentirc-dev.pages.dev",
+      "created_on": "2026-04-21T12:18:20.879820Z",
+      "modified_on": "2026-04-21T12:19:17.974582Z",
+      "latest_stage": {"name": "build", "status": "failure"}
+    },
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+      "short_id": "bbbbbbbb",
+      "project_id": "proj-id-agentirc-dev",
+      "project_name": "agentirc-dev",
+      "environment": "preview",
+      "url": "https://bbbbbbbb.agentirc-dev.pages.dev",
+      "created_on": "2026-03-10T09:00:00.000000Z",
+      "modified_on": "2026-03-10T09:05:00.000000Z",
+      "latest_stage": {"name": "deploy", "status": "success"}
+    },
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+      "short_id": "aaaaaaaa",
+      "project_id": "proj-id-agentirc-dev",
+      "project_name": "agentirc-dev",
+      "environment": "production",
+      "url": "https://aaaaaaaa.agentirc-dev.pages.dev",
+      "created_on": "2025-09-01T08:00:00.000000Z",
+      "modified_on": "2025-09-01T08:10:00.000000Z",
+      "latest_stage": {"name": "deploy", "status": "success"}
+    }
+  ],
+  "result_info": {"page": 1, "per_page": 10, "total_pages": 1, "count": 4, "total_count": 4}
+}

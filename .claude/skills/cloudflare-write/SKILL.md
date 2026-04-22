@@ -78,6 +78,8 @@ Every write script in this skill follows the same shape:
 |---|---|
 | Create a Single Redirect for a zone | `bash .claude/skills/cloudflare-write/scripts/cf-redirect-create.sh FROM_HOST TO_HOST [--www] [--status=301] [--apply] [--json]` |
 | Create a DNS record in a zone | `bash .claude/skills/cloudflare-write/scripts/cf-dns-create.sh ZONE TYPE NAME CONTENT [--proxied] [--ttl=N] [--comment=STR] [--apply] [--json]` |
+| Delete one Pages deployment | `bash .claude/skills/cloudflare-write/scripts/cf-pages-deployment-delete.sh PROJECT SHORT_ID_OR_ID [--force-canonical] [--apply] [--json]` |
+| Bulk-delete all deployments in a Pages project | `bash .claude/skills/cloudflare-write/scripts/cf-pages-deployments-purge.sh PROJECT [...]` (two-phase, see §3.3) |
 
 ### cf-redirect-create.sh
 
@@ -166,6 +168,112 @@ same name with different IPs are allowed (CF supports round-robin);
 two records with identical type+name+content are refused as
 duplicates.
 
+### 3.3 cf-pages-deployment-delete.sh
+
+Deletes a single Pages deployment by `SHORT_ID` (8-char prefix) or
+full UUID. Dry-run by default; `--apply` to commit.
+
+```sh
+# Inventory first (read skill) to pick a short_id:
+bash .claude/skills/cloudflare/scripts/cf-pages.sh agentirc-dev
+
+# Dry-run:
+bash .claude/skills/cloudflare-write/scripts/cf-pages-deployment-delete.sh \
+  agentirc-dev 66aaccee
+
+# Apply for real:
+bash .claude/skills/cloudflare-write/scripts/cf-pages-deployment-delete.sh \
+  agentirc-dev 66aaccee --apply
+```
+
+The **canonical (aliased) deployment is protected by default** — it
+is whatever `<project>.pages.dev` currently serves, so deleting it
+without replacement breaks the site. If the target is canonical, the
+script exits `1` with a refusal message. Override with
+`--force-canonical`, which maps to `?force=true` on the CF DELETE
+endpoint.
+
+### 3.4 cf-pages-deployments-purge.sh (signed-manifest workflow)
+
+Bulk-deletes every non-canonical deployment in a Pages project. This
+is the script to reach for when a project has accumulated hundreds of
+historical deployments (issue #1: `agentirc-dev` had 138).
+
+Because "delete all of them" is one typo away from an outage, this
+script has a **three-phase signed-manifest workflow** that no other
+write script in this skill uses:
+
+1. **Plan** — the default invocation with no `--apply` writes a
+   manifest file to `./.cf-purge-manifests/<ts>-<project>.md` listing
+   every deployment it would delete, plus a SHA-256 of the id list.
+   No API mutations happen. The manifest directory is gitignored at
+   the repo root.
+
+   ```sh
+   bash .claude/skills/cloudflare-write/scripts/cf-pages-deployments-purge.sh agentirc-dev
+   ```
+
+2. **Sign** — a human or peer agent opens the manifest, **reads the
+   deployment table**, and appends exactly one line at the bottom:
+
+   ```text
+   SIGNED: <your-name-or-agent-id> <ISO-8601-UTC-timestamp>
+   ```
+
+   Example: `SIGNED: ori 2026-04-22T14:10:00Z`. The signature must be
+   within `CF_PURGE_SIG_TTL` seconds (default 3600) of apply-time.
+
+3. **Apply** — re-run the script with `--manifest <path> --apply`.
+   Before any DELETE fires, the script:
+   - validates the v1 header, `ids_sha256`, project + account match,
+   - validates the `SIGNED:` line (exactly one, well-formed, fresh),
+   - **re-fetches live state** and rejects on drift (any new
+     non-canonical deployment added since signing), and
+   - skips any ids that are already gone (idempotent re-runs).
+
+   ```sh
+   bash .claude/skills/cloudflare-write/scripts/cf-pages-deployments-purge.sh \
+     agentirc-dev --manifest ./.cf-purge-manifests/20260422T140700Z-agentirc-dev.md --apply
+   ```
+
+An `<manifest>.applied.log` is written next to the manifest with
+per-id outcomes and final counts — permanent audit trail rather than
+stdout-only.
+
+Flags:
+
+- `--include-canonical` — (plan only) include the canonical
+  deployment in the manifest. Canonical is aliased to
+  `<project>.pages.dev`, so its DELETE uses `?force=true`. The flag
+  is recorded in the manifest header so the operator signs the
+  canonical-inclusion decision explicitly.
+- `--manifest PATH` — (apply only) path to the signed manifest.
+- `--manifest-dir DIR` — (plan only) override the default output
+  directory (`./.cf-purge-manifests`).
+- `--apply` — actually DELETE. Requires `--manifest`.
+- `--continue-on-error` — on a failed DELETE, keep going instead of
+  halting. The exit code is still non-zero if any DELETE failed.
+- `--json` — structured envelope for both plan and apply phases.
+- `CF_PURGE_SIG_TTL` / `CF_PURGE_SLEEP` — env knobs for signature
+  TTL and inter-delete pacing. `CF_PURGE_SLEEP=0` disables the
+  default 250ms pacing (used by the test suite).
+
+Exit codes: `0` plan wrote manifest (or "nothing to delete") / apply
+completed with zero failures; `1` API error / manifest validation
+failure / signature invalid / drift detected / any failed DELETE;
+`2` usage error.
+
+**Why a manifest instead of a `--yes` flag?** Four reasons:
+
+1. Forces the operator to **read the concrete list** of ids before
+   approving, rather than acknowledging a count.
+2. **Time-boxed** — a 60-minute-old manifest is rejected, so a stale
+   signature can't be replayed days later.
+3. **Drift-aware** — catches new deployments that appeared between
+   planning and applying (e.g., a CI build mid-signature).
+4. **Reviewable artifact** — pairs nicely with a peer-review model
+   where one agent plans and a different agent signs.
+
 ## 4. Output modes
 
 Default markdown (`cf_output_kv` for the result block):
@@ -192,9 +300,15 @@ downstream jq pipelines.
 
 - **Updates (PUT).** No `cf-*-update.sh` scripts — resources either
   exist (keep them) or don't (create new).
-- **Deletes (DELETE).** Phase 2 territory: `agentirc.dev` Pages /
-  Workers / DNS cleanup will land as `cf-*-delete.sh` scripts in
-  this skill.
+- **Deleting the Pages project itself.** `cf-pages-deployments-purge.sh`
+  deletes every deployment but leaves the zero-deployment project
+  behind. A future `cf-pages-project-delete.sh` will land as a
+  separate, smaller PR.
+- **Workers / DNS / zone deletion.** Still Phase 3 territory; new
+  `cf-*-delete.sh` scripts can follow the same dry-run-by-default
+  pattern. Whether to re-use the manifest gate depends on blast
+  radius — a single DNS record rarely warrants it; bulk route
+  deletion probably does.
 - **Account-wide rulesets.** This skill only creates zone-level
   rulesets. Account-level rulesets (applied across many zones) are
   out of scope.
