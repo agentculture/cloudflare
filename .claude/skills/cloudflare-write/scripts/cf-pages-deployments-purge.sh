@@ -213,11 +213,15 @@ if (( apply == 0 )); then
   #
   # Read a fixed-size block first and slice in bash instead of piping
   # `tr | head -c 22`. With `set -o pipefail` the second head closing
-  # the pipe SIGPIPEs tr, and the whole script exits 141.
-  _canary_alnum=$(head -c 128 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')
+  # the pipe SIGPIPEs tr, and the whole script exits 141. Use a
+  # generous 256-byte sample so the alnum filter reliably yields at
+  # least 22 characters — 128 bytes flaked ~2% in practice
+  # (binomial(128, 62/256), P(X < 22) ≈ 3%), which was enough to break
+  # one CI run out of ~30.
+  _canary_alnum=$(head -c 256 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')
   canary="${_canary_alnum:0:22}"
   if (( ${#canary} != 22 )); then
-    echo "ERROR: failed to generate a 22-char canary (entropy source starved?)" >&2
+    echo "ERROR: canary generation yielded fewer than 22 alphanumeric characters after filtering random input" >&2
     exit 1
   fi
   unset _canary_alnum
@@ -245,9 +249,11 @@ if (( apply == 0 )); then
     printf '## Deployments to delete (%s)\n\n' "$purge_count"
     # shellcheck disable=SC2016  # literal backticks below wrap markdown inline code
     printf 'Tick `- [x]` on the lines you actually want deleted. Unticked lines\n'
-    printf 'are left alone; re-plan to include them in a future manifest. Review\n'
-    printf 'each line before ticking — the canary section below catches sloppy\n'
-    printf '"tick everything" sed-replace shortcuts.\n\n'
+    printf 'are not deleted now and remain in this manifest — to delete them\n'
+    printf 'later, tick them and re-sign (or re-plan for a fresh manifest if\n'
+    printf 'the project has drifted). Review each line before ticking — the\n'
+    printf 'canary section below catches sloppy "tick everything" sed-replace\n'
+    printf 'shortcuts.\n\n'
     # Emit each deployment as an unticked GFM task-list row.
     # Row shape (important — the apply parser depends on it):
     #   - [ ] **<short8>** · `<full-uuid>` · <env> · <status> · <created> [· CANONICAL]
@@ -413,8 +419,11 @@ approved_line_re='^- \[[xX]\] \*\*[a-f0-9]{8}\*\* · `[a-f0-9-]{36}`'
 uuid_extract_re='s/^.*\*\*[a-f0-9]{8}\*\* · `([a-f0-9-]{36})`.*$/\1/'
 
 # Full superset (any tick state) — feeds the SHA tamper check + drift.
+# `|| true` so grep's "no match → exit 1" path doesn't tank the
+# script under `set -e`; the follow-up count-mismatch check below
+# reports the real problem (zero rows) with a specific message.
 manifest_ids_sorted=$(grep -E "$deploy_line_re" "$manifest_path" \
-  | sed -E "$uuid_extract_re" | sort)
+  | sed -E "$uuid_extract_re" | sort || true)
 manifest_ids_count=$(printf '%s\n' "$manifest_ids_sorted" | grep -c . || true)
 
 if [[ "$manifest_ids_count" != "$m_count" ]]; then
