@@ -36,8 +36,11 @@ PUT / DELETE with it will fail with `code 10000 Authentication error`.
 Provision a second token (see `docs/SETUP.md` §1.5 **Write-ops
 token**) with these *additional* scopes on top of the read scopes:
 
-- **Zone · Dynamic Redirect · Edit** (All zones from AgentCulture) —
-  required by `cf-redirect-create.sh`
+- **Zone · Single Redirect · Edit** (All zones from AgentCulture) —
+  required by `cf-redirect-create.sh`. (The CloudFlare Rulesets API
+  still uses `http_request_dynamic_redirect` as the phase
+  identifier, but the dashboard's token-scope label is "Single
+  Redirect".)
 - **Zone · DNS · Edit** (All zones from AgentCulture) —
   required by `cf-dns-create.sh`
 

@@ -69,7 +69,7 @@ account and "All zones from an account" exactly like the read token.
 
 | Scope (CloudFlare dashboard label)       | Level | Access | Powers                                                                   |
 |------------------------------------------|-------|--------|--------------------------------------------------------------------------|
-| **Zone · Dynamic Redirect** (All zones)  | Zone  | Edit   | `cf-redirect-create.sh` — creates the zone-level Single Redirect ruleset |
+| **Zone · Single Redirect** (All zones)  | Zone  | Edit   | `cf-redirect-create.sh` — creates the zone-level Single Redirect ruleset |
 | **Zone · DNS** (All zones)               | Zone  | Edit   | `cf-dns-create.sh` — creates a DNS record (A / AAAA / CNAME / TXT / MX / …) |
 
 Swap tokens by editing `.env`'s `CLOUDFLARE_API_TOKEN` when you're
@@ -133,7 +133,7 @@ and run dry-runs against a real zone to exercise the Edit scopes
 without mutating anything:
 
 ```sh
-# Dynamic Redirect · Edit
+# Single Redirect · Edit
 bash .claude/skills/cloudflare-write/scripts/cf-redirect-create.sh \
   agentculture.org culture.dev --www
 
