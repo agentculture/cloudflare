@@ -407,14 +407,22 @@ JSON
   cf_mock "/pages/projects/agentirc-dev/deployments/ffffffff" "pages_deployment_delete_ok.json"
   run bash "$PURGE_SCRIPT" agentirc-dev --manifest "$manifest" --apply
   [ "$status" -eq 0 ]
-  # Every DELETE URL in the log ends with `?force=true`. grep for any
-  # DELETE that does NOT have it → expect zero.
-  run grep -F -- '-X	DELETE' "$BATS_TEST_TMPDIR/curl.log"
+  # Use `grep -c` directly — it reports an accurate count (0 for no
+  # match, correct non-zero exit code). The earlier `echo "$var" | wc -l`
+  # pattern would double-count a trailing newline and mask the case
+  # where there are zero DELETEs but zero ?force=true either (both
+  # pipelines would report 1). (Copilot caught this on PR #14.)
+  run grep -cF -- '-X	DELETE' "$BATS_TEST_TMPDIR/curl.log"
+  [ "$status" -eq 0 ]
   local total_deletes="$output"
-  run grep -F -- '?force=true' "$BATS_TEST_TMPDIR/curl.log"
-  local forced_deletes="$output"
-  [ -n "$total_deletes" ]
-  [ "$(echo "$total_deletes" | wc -l)" = "$(echo "$forced_deletes" | wc -l)" ]
+  [ "$total_deletes" -gt 0 ]
+  # Count DELETE lines that ALSO carry ?force=true. Filter first on
+  # DELETE so we don't false-match a ?force=true that happened to
+  # appear in some other logged curl argv (defensive — there's no
+  # such path today, but belt + suspenders).
+  run bash -c "grep -F -- '-X	DELETE' \"$BATS_TEST_TMPDIR/curl.log\" | grep -cF -- '?force=true'"
+  [ "$status" -eq 0 ]
+  [ "$total_deletes" = "$output" ]
 }
 
 @test "purge apply deletes ONLY the ticked subset, leaves others untouched" {

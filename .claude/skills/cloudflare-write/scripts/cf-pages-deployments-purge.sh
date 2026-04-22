@@ -27,9 +27,13 @@
 #
 # Flags:
 #   --include-canonical   include the canonical (aliased) deployment
-#                         in the manifest. The final DELETE for that
-#                         id uses ?force=true. Recorded in the
-#                         manifest header, signed explicitly.
+#                         in the manifest. Recorded in the manifest
+#                         header so the operator signs the
+#                         canonical-inclusion decision explicitly.
+#                         (Every DELETE in the apply loop carries
+#                         ?force=true unconditionally — canonical
+#                         isn't special there; see the apply-loop
+#                         comment for the reasoning.)
 #   --manifest-dir DIR    directory for the plan's manifest file
 #                         (default: ./.cf-purge-manifests)
 #   --manifest PATH       (apply only) path to a signed manifest
