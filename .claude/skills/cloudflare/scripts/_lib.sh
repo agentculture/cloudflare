@@ -178,8 +178,11 @@ cf_api_paginated() {
   local separator="?"
   [[ "$path" == *"?"* ]] && separator="&"
 
+  # Bare `mktemp` (no template) works on GNU coreutils but BSD / macOS
+  # `mktemp` requires either a template argument or `-t`. Pass an
+  # explicit template so this stays portable.
   local tmp
-  tmp=$(mktemp)
+  tmp=$(mktemp "${TMPDIR:-/tmp}/cf_api_paginated.XXXXXX")
   # shellcheck disable=SC2064  # $tmp expanded at trap-set time (intentional)
   trap "rm -f '$tmp' '$tmp.next'" RETURN
   printf '[]' > "$tmp"

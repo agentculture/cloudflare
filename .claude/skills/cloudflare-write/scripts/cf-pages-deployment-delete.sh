@@ -81,10 +81,16 @@ project_encoded=$(jq -rn --arg v "$project" '$v|@uri')
 
 # Fetch project metadata for canonical_deployment.id. The project-detail
 # endpoint is a single-object GET, so use cf_api directly, not _paginated.
-project_json=$(cf_api "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project_encoded" 2>/dev/null) || {
-  echo "ERROR: Pages project not found: $project" >&2
+# Don't silence cf_api's stderr — it distinguishes "project missing"
+# from "token lacks scope" / "transport failure" with structured
+# .errors, and hiding that turns every failure into the same
+# misleading "not found" message. cf_api already prints its own
+# diagnostic; we just add a final hint that the project arg was the
+# resolution target.
+if ! project_json=$(cf_api "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project_encoded"); then
+  echo "HINT: could not resolve Pages project '$project'. Check the project name with cf-pages.sh." >&2
   exit 1
-}
+fi
 canonical_id=$(printf '%s' "$project_json" | jq -r '.result.canonical_deployment.id // ""')
 
 # Resolve target to a full deployment id. If the user passed a full
@@ -151,6 +157,7 @@ render_summary_kv() {
   printf -- '- **status:** %s\n' "$status"
   printf -- '- **created:** %s\n' "$created_on"
   printf -- '- **canonical:** %s\n' "$([[ $is_canonical -eq 1 ]] && echo 'yes (force=true)' || echo 'no')"
+  return 0
 }
 
 if (( apply == 0 )); then

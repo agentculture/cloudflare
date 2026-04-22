@@ -48,7 +48,6 @@ _assert_no_delete() {
 # --- dry-run, non-canonical ---
 
 @test "cf-pages-deployment-delete dry-run on non-canonical short_id prints would-DELETE, no DELETE call" {
-  cf_mock "/pages/projects/agentirc-dev?per_page" "pages_deployments_agentirc.json"
   cf_mock "/pages/projects/agentirc-dev/deployments?per_page" "pages_deployments_agentirc.json"
   cf_mock "/pages/projects/agentirc-dev" "pages_project_agentirc_detail.json"
   run bash "$WRITE_SCRIPTS/cf-pages-deployment-delete.sh" agentirc-dev bbbbbbbb
@@ -142,11 +141,14 @@ _assert_no_delete() {
 
 # --- resolution errors ---
 
-@test "cf-pages-deployment-delete exits 1 when project does not exist" {
+@test "cf-pages-deployment-delete exits 1 when project does not exist and surfaces the underlying CF error" {
   cf_mock "/pages/projects/nosuch" "pages_project_not_found.json"
   run bash "$WRITE_SCRIPTS/cf-pages-deployment-delete.sh" nosuch bbbbbbbb
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Pages project not found"* ]]
+  # cf_api's own error output is preserved (not swallowed with 2>/dev/null),
+  # so both the CF-side message and our locally-added hint are visible.
+  [[ "$output" == *"Project not found"* ]]
+  [[ "$output" == *"could not resolve Pages project"* ]]
   _assert_no_delete
 }
 

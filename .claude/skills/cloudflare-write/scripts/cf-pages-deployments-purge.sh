@@ -137,11 +137,13 @@ fetch_canonical_id() {
   local pj
   pj=$(cf_api "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project_encoded") || return 1
   printf '%s' "$pj" | jq -r '.result.canonical_deployment.id // ""'
+  return 0
 }
 
 # Fetch the full deployment list for the project (Pages per_page cap = 10).
 fetch_deployments_json() {
   CF_PAGE_SIZE=10 cf_api_paginated "/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project_encoded/deployments"
+  return 0
 }
 
 # Compute a stable SHA-256 over a JSON array of ids (sorted, newline-
@@ -149,6 +151,7 @@ fetch_deployments_json() {
 ids_sha256() {
   local ids_json="$1"
   printf '%s' "$ids_json" | jq -r 'sort | .[]' | sha256sum | awk '{print $1}'
+  return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -300,6 +303,7 @@ manifest_read_kv() {
     exit 1
   fi
   grep -E "^- \*\*${key}:\*\* " "$manifest_path" | sed -E "s/^- \*\*${key}:\*\* //"
+  return 0
 }
 
 m_project=$(manifest_read_kv project)
@@ -378,16 +382,34 @@ if (( ${#signer} > 64 )); then
   exit 1
 fi
 
-# Parse signature timestamp into epoch. `date -d` handles ISO-8601
-# with trailing Z on GNU coreutils. Reject anything that doesn't
-# parse — we treat that as tampering.
-sig_epoch=$(date -u -d "$sig_ts" +%s 2>/dev/null || echo "")
-if [[ -z "$sig_epoch" ]]; then
+# Parse signature timestamp into epoch. GNU `date -d` and BSD
+# `date -j -f` have incompatible syntaxes — try the GNU form first
+# (CI + most Linux agents) and fall back to BSD (macOS operators
+# running the skill locally). Reject anything that doesn't parse
+# either way — we treat that as tampering.
+iso8601_to_epoch() {
+  local ts="$1" out=""
+  if out=$(date -u -d "$ts" +%s 2>/dev/null); then
+    printf '%s' "$out"; return 0
+  fi
+  # BSD date: strip a trailing Z, then parse as "%Y-%m-%dT%H:%M:%S".
+  local bsd_ts="${ts%Z}"
+  if out=$(date -u -j -f '%Y-%m-%dT%H:%M:%S' "$bsd_ts" +%s 2>/dev/null); then
+    printf '%s' "$out"; return 0
+  fi
+  return 1
+}
+
+if ! sig_epoch=$(iso8601_to_epoch "$sig_ts"); then
   echo "ERROR: SIGNED timestamp not parseable: $sig_ts" >&2
   exit 1
 fi
 now_epoch=$(date -u +%s)
 ttl="${CF_PURGE_SIG_TTL:-3600}"
+if [[ ! "$ttl" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: CF_PURGE_SIG_TTL must be an integer number of seconds; got: $ttl" >&2
+  exit 1
+fi
 age=$(( now_epoch - sig_epoch ))
 if (( age > ttl )); then
   echo "ERROR: SIGNED timestamp expired (age ${age}s > TTL ${ttl}s): $sig_ts" >&2
@@ -502,7 +524,12 @@ while IFS=$'\t' read -r d_id d_short d_env d_canonical; do
     delete_path="${delete_path}?force=true"
   fi
 
-  if err=$(cf_api "$delete_path" -X DELETE 2>&1 >/dev/null); then
+  # Brace group order matters: cmd >/dev/null first, then 2>&1 around
+  # the group. Writing it the other way ('2>&1 >/dev/null') dup's
+  # stderr to the *original* stdout before stdout gets sent to
+  # /dev/null, so cf_api's .errors payload ends up on the terminal
+  # instead of in `err` — exactly what audit logging needs to avoid.
+  if err=$({ cf_api "$delete_path" -X DELETE >/dev/null; } 2>&1); then
     deleted=$((deleted + 1))
     printf '%s\tdeleted\t%s\t%s\t%s\n' \
       "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$d_short" "$d_id" "$d_env" >> "$log_path"
