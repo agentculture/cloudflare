@@ -391,6 +391,40 @@ JSON
   [ "$output" = "2" ]
 }
 
+@test "purge apply always sends ?force=true on EVERY DELETE (guards against issue #1 follow-up)" {
+  # CF Pages marks both the canonical deployment AND every per-branch
+  # preview deployment (aliases like `<branch>.<project>.pages.dev`)
+  # as aliased. A force-free DELETE on any of them returns CF code
+  # 8000035. The manifest-tick gate is the real consent layer, so the
+  # script unconditionally forces — this test stops a regression that
+  # would silently halt a purge partway through (which happened live
+  # on `agentirc-dev` with 41 aliased deployments in the 137-row set).
+  cf_mock "/pages/projects/agentirc-dev/deployments?per_page" "pages_deployments_agentirc.json"
+  cf_mock "/pages/projects/agentirc-dev" "pages_project_agentirc_detail.json"
+  local manifest
+  manifest=$(_plan_and_sign)
+  cf_mock "/pages/projects/agentirc-dev/deployments/bbbbbbbb" "pages_deployment_delete_ok.json"
+  cf_mock "/pages/projects/agentirc-dev/deployments/ffffffff" "pages_deployment_delete_ok.json"
+  run bash "$PURGE_SCRIPT" agentirc-dev --manifest "$manifest" --apply
+  [ "$status" -eq 0 ]
+  # Use `grep -c` directly — it reports an accurate count (0 for no
+  # match, correct non-zero exit code). The earlier `echo "$var" | wc -l`
+  # pattern would double-count a trailing newline and mask the case
+  # where there are zero DELETEs but zero ?force=true either (both
+  # pipelines would report 1). (Copilot caught this on PR #14.)
+  run grep -cF -- '-X	DELETE' "$BATS_TEST_TMPDIR/curl.log"
+  [ "$status" -eq 0 ]
+  local total_deletes="$output"
+  [ "$total_deletes" -gt 0 ]
+  # Count DELETE lines that ALSO carry ?force=true. Filter first on
+  # DELETE so we don't false-match a ?force=true that happened to
+  # appear in some other logged curl argv (defensive — there's no
+  # such path today, but belt + suspenders).
+  run bash -c "grep -F -- '-X	DELETE' \"$BATS_TEST_TMPDIR/curl.log\" | grep -cF -- '?force=true'"
+  [ "$status" -eq 0 ]
+  [ "$total_deletes" = "$output" ]
+}
+
 @test "purge apply deletes ONLY the ticked subset, leaves others untouched" {
   cf_mock "/pages/projects/agentirc-dev/deployments?per_page" "pages_deployments_agentirc.json"
   cf_mock "/pages/projects/agentirc-dev" "pages_project_agentirc_detail.json"

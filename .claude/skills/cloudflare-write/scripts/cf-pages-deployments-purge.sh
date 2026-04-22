@@ -27,9 +27,13 @@
 #
 # Flags:
 #   --include-canonical   include the canonical (aliased) deployment
-#                         in the manifest. The final DELETE for that
-#                         id uses ?force=true. Recorded in the
-#                         manifest header, signed explicitly.
+#                         in the manifest. Recorded in the manifest
+#                         header so the operator signs the
+#                         canonical-inclusion decision explicitly.
+#                         (Every DELETE in the apply loop carries
+#                         ?force=true unconditionally — canonical
+#                         isn't special there; see the apply-loop
+#                         comment for the reasoning.)
 #   --manifest-dir DIR    directory for the plan's manifest file
 #                         (default: ./.cf-purge-manifests)
 #   --manifest PATH       (apply only) path to a signed manifest
@@ -374,9 +378,10 @@ m_account=$(manifest_read_kv account_id)
 m_canonical=$(manifest_read_kv canonical_deployment_id)
 # include_canonical is captured here as a parsed header field but not
 # referenced again: whether canonical is in the purge set is already
-# decided by its membership in the id table, and the ?force=true flag
-# is driven by per-id `is_canonical` built from the *live* project
-# state below. Keep parsing it so a malformed header still fails fast.
+# decided by its membership in the id list. Every DELETE now passes
+# `?force=true` unconditionally (see the delete loop below), so there's
+# no downstream `is_canonical` routing to do. Parse the field anyway
+# so a malformed header fails fast.
 _=$(manifest_read_kv include_canonical)
 m_count=$(manifest_read_kv count)
 m_hash=$(manifest_read_kv ids_sha256)
@@ -652,13 +657,19 @@ failures_json='[]'
 
 sleep_s="${CF_PURGE_SLEEP:-0.25}"
 
-# Iterate the plan oldest-first.
-while IFS=$'\t' read -r d_id d_short d_env d_canonical; do
+# Iterate the plan oldest-first. Every DELETE unconditionally carries
+# `?force=true` — the CF parameter is only meaningful for aliased
+# deployments (canonical AND per-branch preview aliases like
+# `<branch>.<project>.pages.dev`) and is a no-op on unaliased ones.
+# We discovered the hard way on issue #1 that `agentirc-dev`'s preview
+# builds have branch aliases, so a force-free DELETE returns CF error
+# code 8000035 ("cannot delete an aliased deployment without
+# ?force=true"). The manifest tick is the real consent gate — if the
+# operator approved a row, that's permission to drop it regardless
+# of which CF-side alias check would normally fire.
+while IFS=$'\t' read -r d_id d_short d_env; do
   [[ -z "$d_id" ]] && continue
-  delete_path="/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project_encoded/deployments/$d_id"
-  if [[ "$d_canonical" == "true" ]]; then
-    delete_path="${delete_path}?force=true"
-  fi
+  delete_path="/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project_encoded/deployments/$d_id?force=true"
 
   # Brace group order matters: cmd >/dev/null first, then 2>&1 around
   # the group. Writing it the other way ('2>&1 >/dev/null') dup's
@@ -686,7 +697,7 @@ while IFS=$'\t' read -r d_id d_short d_env d_canonical; do
       break
     fi
   fi
-done < <(printf '%s' "$plan_json" | jq -r '.[] | [.id, .short_id, .environment, (.is_canonical|tostring)] | @tsv')
+done < <(printf '%s' "$plan_json" | jq -r '.[] | [.id, .short_id, .environment] | @tsv')
 
 {
   printf '# ---\n'

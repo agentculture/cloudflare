@@ -254,10 +254,12 @@ stdout-only.
 Flags:
 
 - `--include-canonical` — (plan only) include the canonical
-  deployment in the manifest. Canonical is aliased to
-  `<project>.pages.dev`, so its DELETE uses `?force=true`. The flag
-  is recorded in the manifest header so the operator signs the
-  canonical-inclusion decision explicitly.
+  deployment in the manifest. The flag is recorded in the manifest
+  header so the operator signs the canonical-inclusion decision
+  explicitly. (Apply unconditionally sends `?force=true` on every
+  DELETE since CF Pages marks canonical **and** every per-branch
+  preview as aliased; `?force=true` is a no-op on unaliased
+  deployments. The per-row tick is the real consent gate.)
 - `--manifest PATH` — (apply only) path to the signed manifest.
 - `--manifest-dir DIR` — (plan only) override the default output
   directory (`./.cf-purge-manifests`).
