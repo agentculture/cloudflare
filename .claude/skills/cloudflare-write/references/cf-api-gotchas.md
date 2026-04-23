@@ -20,19 +20,18 @@ most list endpoints accept up to 1000, Pages silently caps at 10.
 `_lib.sh`'s `cf_api_paginated` defaults to `per_page=50`, which
 works everywhere else and fails here.
 
-**Guard.** Pages-touching scripts export `CF_PAGE_SIZE=10` before
-calling `cf_api_paginated`:
+**Guard.** Pages-touching scripts set `CF_PAGE_SIZE=10` (either
+exported globally in the script or scoped to a single
+`cf_api_paginated` call) before every Pages list endpoint hit:
 
-- `cf-pages.sh` ([scripts/cf-pages.sh](../../cloudflare/scripts/cf-pages.sh))
-- `cf-pages-project-create.sh`
-- `cf-pages-deployment-delete.sh`
-- `cf-pages-deployments-purge.sh`
+- `cf-pages.sh` ([scripts/cf-pages.sh](../../cloudflare/scripts/cf-pages.sh)) — exports
+- `cf-pages-project-create.sh` — exports
+- `cf-pages-deployment-delete.sh` — scoped per-call
+- `cf-pages-deployments-purge.sh` — scoped per-call
 
 Every other list endpoint can keep the library default. If you add a
-new Pages-touching script, export the override before the call or the
+new Pages-touching script, set the override before each call or the
 pagination walker will 8000024 on the first request.
-
-Related memory: `memory/pages_pagination_quirk.md`.
 
 ## 2. Pages subdomain auto-suffixing
 
@@ -136,5 +135,3 @@ permissions problem, which makes it easy to chase the wrong rabbit.
 for any zone-level Edit permission (Single Redirect, DNS, Workers
 Routes). `docs/SETUP.md` §1.5 lists every scope in one place so a
 fresh token covers the whole surface.
-
-Related memory: `memory/zone_ids.md`.

@@ -35,19 +35,21 @@ For every cf-*.sh script added or modified on the current branch vs
 Always work from the repo root (`/home/spark/git/cloudflare` or
 wherever the caller invokes you). Never modify any file.
 
-1. **Determine the changed-files set — UNION all three sources**, do
+1. **Determine the changed-files set — UNION all four sources**, do
    not short-circuit on the first one:
    - `git diff --name-only main...HEAD` (commits on the current branch
      vs `main`) — empty on a brand-new branch with no commits yet, or
      when running on `main` itself.
-   - `git diff --name-only HEAD` (unstaged working-tree changes).
+   - `git diff --name-only HEAD` (unstaged working-tree changes to
+     tracked files).
    - `git diff --cached --name-only` (staged changes).
+   - `git ls-files --others --exclude-standard` (untracked files, i.e.
+     files created but not yet `git add`'d). A freshly-created
+     `cf-foo.sh` that hasn't been staged is exactly the state
+     `gh pr create` is about to regret — include it.
 
-   Take the union (`sort -u`). Missing the staged/unstaged sources
-   means a branch with pending edits but zero commits would falsely
-   short-circuit as "clean" — the whole point of this agent is to
-   catch misalignment *before* `gh pr create`, which is precisely
-   that state.
+   Take the union (`sort -u`). Any source skipped re-opens the
+   short-circuit hole this agent exists to close.
 
    If the union is empty: exit 0 with `no script changes detected —
    nothing to verify` and stop.
@@ -62,8 +64,17 @@ wherever the caller invokes you). Never modify any file.
    bullet like `MISSING: tests/bats/cf-foo.bats (expected for
    .claude/skills/cloudflare-write/scripts/cf-foo.sh)`.
 
-   Check (2) implementation: read the bats file, grep for
-   `cf_mock "[^"]*" "\(.*\.json\)"`, capture the fixture names.
+   Check (2) implementation: read the bats file and extract fixture
+   names with flexible whitespace between the two quoted `cf_mock`
+   args — existing bats files column-align these for readability, so
+   a single-space pattern misses them. Use extended regex with
+   `[[:space:]]+`, e.g.
+
+   ```sh
+   grep -Eo 'cf_mock[[:space:]]+"[^"]*"[[:space:]]+"[^"]+\.json"' "$bats_file" \
+     | sed -E 's/.*"([^"]+\.json)".*/\1/'
+   ```
+
    Check (3): for each captured name, assert
    `tests/fixtures/<name>` exists.
    Check (4): grep the owning `SKILL.md` for a line containing the

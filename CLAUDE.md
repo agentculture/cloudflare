@@ -21,11 +21,15 @@ orient against live CF and the skills themselves, in this order:
    its own current script inventory, token-scope requirements, and
    the pointers to `references/` for architecture notes and the
    CF API gotchas we've paid for.
-3. **Session memory.**
-   `~/.claude/projects/-home-spark-git-cloudflare/memory/MEMORY.md`
-   — conversation-scoped agreements (site structure, applied-resource
-   IDs, workflow preferences). Load this if you're picking up
-   unfinished work or need the "why" behind a decision.
+3. **Session memory** (Claude Code session-local, not committed to the
+   repo). Claude Code persists per-project memory under
+   `~/.claude/projects/<slug>/memory/`, where `<slug>` is a
+   filename-safe encoding of this repo's absolute path
+   (e.g. `/home/alice/src/cloudflare` → `-home-alice-src-cloudflare`).
+   Read `MEMORY.md` in that directory for conversation-scoped
+   agreements (site structure, applied-resource IDs, workflow
+   preferences). Only your own sessions have written there — freshly
+   cloned machines start empty.
 
 ## Layout
 
