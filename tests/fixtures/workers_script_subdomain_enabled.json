@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": {
+    "enabled": true,
+    "previews_enabled": false
+  }
+}
