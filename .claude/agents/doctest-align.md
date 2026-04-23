@@ -14,7 +14,7 @@ tools: Bash, Read, Glob, Grep
 
 # doctest-align
 
-You are the doc-test-alignment checker for the cloudflare repo.
+You are the doc-test-alignment checker for the cfafi repo.
 
 ## What you verify
 
@@ -32,7 +32,7 @@ For every cf-*.sh script added or modified on the current branch vs
 
 ## How to run
 
-Always work from the repo root (`/home/spark/git/cloudflare` or
+Always work from the repo root (`/home/spark/git/cfafi` or
 wherever the caller invokes you). Never modify any file.
 
 1. **Determine the changed-files set — UNION all four sources**, do

@@ -1,4 +1,4 @@
-# markdownlint-cli2 config for the cloudflare repo.
+# markdownlint-cli2 config for the cfafi repo.
 # Mirrors the workspace's global ~/.markdownlint-cli2.yaml so clones get
 # identical behaviour without depending on per-machine setup.
 
