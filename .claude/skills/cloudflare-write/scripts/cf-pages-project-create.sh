@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Create a Cloudflare Pages project connected to a GitHub repository.
+# Create a Cloudflare Pages project — either GitHub-connected (default)
+# or Direct Upload (with --direct-upload).
 #
 # Usage:
+#   # GitHub-connected:
 #   cf-pages-project-create.sh NAME GITHUB_OWNER REPO_NAME [flags]
+#   # Direct Upload (no git source; deployments come from wrangler /
+#   # the CF Pages deploy API — used by agex, citation-cli, afi):
+#   cf-pages-project-create.sh NAME --direct-upload [flags]
 #
 # Default is DRY-RUN: verifies the account id, checks no project with
 # NAME already exists, resolves --clone-from (if given), prints the
@@ -11,12 +16,20 @@
 #
 # Prerequisites for --apply to succeed against the live API:
 #   * CLOUDFLARE_API_TOKEN has Account · Cloudflare Pages · Edit
-#   * The Cloudflare Pages GitHub App is installed on GITHUB_OWNER and
-#     granted access to REPO_NAME. If not, the POST fails with a CF
-#     error about the repo being unreachable — that's a dashboard /
-#     GitHub-org-admin action this script cannot automate.
+#   * (GitHub-connected only) The Cloudflare Pages GitHub App is
+#     installed on GITHUB_OWNER and granted access to REPO_NAME. If
+#     not, the POST fails with a CF error about the repo being
+#     unreachable — that's a dashboard / GitHub-org-admin action this
+#     script cannot automate. Direct Upload has no GitHub App dep.
 #
 # Flags:
+#   --direct-upload             create a Direct Upload project (no
+#                               `source` field in the POST body; the
+#                               project is populated via later
+#                               `wrangler pages deploy` / direct-upload
+#                               API calls). Positional args collapse
+#                               to NAME only; passing OWNER / REPO
+#                               alongside --direct-upload is an error.
 #   --clone-from=PROJECT        copy build_config, deployment_configs,
 #                               and production_branch from an existing
 #                               Pages project in the same account.
@@ -24,6 +37,10 @@
 #                               --root-dir / --production-branch /
 #                               --compatibility-date / --build-image-version
 #                               flags override the cloned values.
+#                               --clone-from only copies build + deploy
+#                               config — the source block is always
+#                               derived fresh from OWNER / REPO (or
+#                               omitted under --direct-upload).
 #   --production-branch=BRANCH  git branch that produces production
 #                               deployments (default: main, or cloned)
 #   --build-command=CMD         shell command CF runs to build the site
@@ -47,6 +64,7 @@ shopt -s inherit_errexit
 
 mode=md
 apply=0
+direct_upload=0
 clone_from=""
 production_branch=""
 build_command=""
@@ -68,8 +86,9 @@ positional=()
 
 for arg in "$@"; do
   case "$arg" in
-    --json)   mode=json ;;
-    --apply)  apply=1 ;;
+    --json)            mode=json ;;
+    --apply)           apply=1 ;;
+    --direct-upload)   direct_upload=1 ;;
     --clone-from=*)           clone_from="${arg#*=}" ;;
     --production-branch=*)    production_branch="${arg#*=}"; production_branch_set=1 ;;
     --build-command=*)        build_command="${arg#*=}"; build_command_set=1 ;;
@@ -91,14 +110,26 @@ for arg in "$@"; do
   esac
 done
 
-if (( ${#positional[@]} != 3 )); then
-  echo "ERROR: expected NAME, GITHUB_OWNER, and REPO_NAME positional args, got ${#positional[@]}" >&2
-  echo "usage: cf-pages-project-create.sh NAME GITHUB_OWNER REPO_NAME [flags]" >&2
-  exit 2
+if (( direct_upload )); then
+  if (( ${#positional[@]} != 1 )); then
+    echo "ERROR: --direct-upload takes exactly one positional arg (NAME), got ${#positional[@]}" >&2
+    echo "usage: cf-pages-project-create.sh NAME --direct-upload [flags]" >&2
+    exit 2
+  fi
+  name="${positional[0]}"
+  owner=""
+  repo=""
+else
+  if (( ${#positional[@]} != 3 )); then
+    echo "ERROR: expected NAME, GITHUB_OWNER, and REPO_NAME positional args, got ${#positional[@]}" >&2
+    echo "usage: cf-pages-project-create.sh NAME GITHUB_OWNER REPO_NAME [flags]" >&2
+    echo "   or: cf-pages-project-create.sh NAME --direct-upload [flags]" >&2
+    exit 2
+  fi
+  name="${positional[0]}"
+  owner="${positional[1]}"
+  repo="${positional[2]}"
 fi
-name="${positional[0]}"
-owner="${positional[1]}"
-repo="${positional[2]}"
 
 # CF Pages project names: 1-58 chars, [a-z0-9-], cannot start/end with
 # hyphen. Enforce locally so errors come from us, not a cryptic CF 400.
@@ -108,14 +139,17 @@ if [[ ! "$name" =~ ^[a-z0-9]([a-z0-9-]{0,56}[a-z0-9])?$ ]]; then
   exit 2
 fi
 
-# GitHub owner / repo naming: alnum, dash, underscore, dot.
-gh_re='^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$'
-for v in "$owner" "$repo"; do
-  if [[ ! "$v" =~ $gh_re ]]; then
-    echo "ERROR: invalid GitHub identifier: $v" >&2
-    exit 2
-  fi
-done
+# GitHub owner / repo naming: alnum, dash, underscore, dot. Skipped
+# under --direct-upload where there's no source repo to validate.
+if (( direct_upload == 0 )); then
+  gh_re='^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$'
+  for v in "$owner" "$repo"; do
+    if [[ ! "$v" =~ $gh_re ]]; then
+      echo "ERROR: invalid GitHub identifier: $v" >&2
+      exit 2
+    fi
+  done
+fi
 
 if [[ -n "$production_branch" ]]; then
   branch_re='^[A-Za-z0-9._/-]{1,255}$'
@@ -229,25 +263,10 @@ body=$(jq -n \
   --arg root_dir       "$effective_root_dir" \
   --arg compat_date    "$effective_compat_date" \
   --argjson build_image "$effective_build_image" \
-  '{
+  --argjson direct_upload "$direct_upload" \
+  '({
     name: $name,
     production_branch: $prod_branch,
-    source: {
-      type: "github",
-      config: {
-        owner: $owner,
-        repo_name: $repo,
-        production_branch: $prod_branch,
-        pr_comments_enabled: true,
-        deployments_enabled: true,
-        production_deployments_enabled: true,
-        preview_deployment_setting: "all",
-        preview_branch_includes: ["*"],
-        preview_branch_excludes: [],
-        path_includes: ["*"],
-        path_excludes: []
-      }
-    },
     build_config: {
       build_command: $build_command,
       destination_dir: $dest_dir,
@@ -267,14 +286,35 @@ body=$(jq -n \
         usage_model: "standard"
       } + (if $compat_date == "" then {} else {compatibility_date: $compat_date} end))
     }
-  }')
+  })
+  + (if $direct_upload == 1 then {} else {
+    source: {
+      type: "github",
+      config: {
+        owner: $owner,
+        repo_name: $repo,
+        production_branch: $prod_branch,
+        pr_comments_enabled: true,
+        deployments_enabled: true,
+        production_deployments_enabled: true,
+        preview_deployment_setting: "all",
+        preview_branch_includes: ["*"],
+        preview_branch_excludes: [],
+        path_includes: ["*"],
+        path_excludes: []
+      }
+    }} end)')
 
 _render_summary_md() {
   local banner="$1"
   printf '%s\n\n' "$banner"
   printf -- '- **name:** %s\n' "$name"
   printf -- '- **account:** %s\n' "$CLOUDFLARE_ACCOUNT_ID"
-  printf -- '- **source:** github:%s/%s\n' "$owner" "$repo"
+  if (( direct_upload )); then
+    printf -- '- **source:** direct_upload\n'
+  else
+    printf -- '- **source:** github:%s/%s\n' "$owner" "$repo"
+  fi
   printf -- '- **production_branch:** %s\n' "$effective_production_branch"
   printf -- '- **build_command:** %s\n' "${effective_build_command:-—}"
   printf -- '- **destination_dir:** %s\n' "${effective_destination_dir:-—}"

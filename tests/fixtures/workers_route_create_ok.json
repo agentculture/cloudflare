@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": {
+    "id": "route-culture-dev-afi-99999999",
+    "pattern": "culture.dev/afi*",
+    "script": "afi-proxy"
+  }
+}

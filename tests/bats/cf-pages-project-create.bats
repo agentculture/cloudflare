@@ -225,3 +225,59 @@ _assert_no_post() {
   echo "$output" | jq -e '.result.would_post.production_branch == "develop"'
   echo "$output" | jq -e '.result.would_post.source.config.production_branch == "develop"'
 }
+
+# --- --direct-upload ---
+
+@test "cf-pages-project-create.sh --direct-upload dry-run omits source and reports direct_upload" {
+  cf_mock "/pages/projects?per_page" "pages_projects_with_culture_dev.json"
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" afi --direct-upload \
+    --compatibility-date=2026-04-20
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"**Dry-run — no changes applied**"* ]]
+  [[ "$output" == *"**name:** afi"* ]]
+  [[ "$output" == *"**source:** direct_upload"* ]]
+  [[ "$output" != *'"type": "github"'* ]]
+  [[ "$output" != *'"source":'* ]]
+  _assert_no_post
+}
+
+@test "cf-pages-project-create.sh --direct-upload --json has no source key" {
+  cf_mock "/pages/projects?per_page" "pages_projects_with_culture_dev.json"
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" afi --direct-upload --json
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.result.would_post.name == "afi"'
+  echo "$output" | jq -e '.result.would_post | has("source") | not'
+  echo "$output" | jq -e '.result.would_post.production_branch == "main"'
+  _assert_no_post
+}
+
+@test "cf-pages-project-create.sh --direct-upload rejects extra positional args" {
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" afi agentculture afi-cli --direct-upload
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--direct-upload takes exactly one positional arg"* ]]
+}
+
+@test "cf-pages-project-create.sh --direct-upload requires NAME" {
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" --direct-upload
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--direct-upload takes exactly one positional arg"* ]]
+}
+
+@test "cf-pages-project-create.sh --direct-upload --apply POSTs source-less body" {
+  cf_mock "/pages/projects?per_page" "pages_projects_with_culture_dev.json"
+  cf_mock "/pages/projects"          "pages_project_create_direct_upload_ok.json"
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" afi --direct-upload \
+    --compatibility-date=2026-04-20 --apply
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"**Pages project created**"* ]]
+  [[ "$output" == *"proj-id-afi-new-12345678"* ]]
+  [[ "$output" == *"https://afi.pages.dev"* ]]
+  cf_assert_called "-X	POST"
+  cf_assert_called "/accounts/test-account-id/pages/projects"
+  # The request body must not contain a source field — grep the full
+  # curl.log for "source" and confirm it's absent.
+  if grep -F '"source"' "$BATS_TEST_TMPDIR/curl.log"; then
+    echo "--direct-upload must not include source field in POST body" >&2
+    return 1
+  fi
+}

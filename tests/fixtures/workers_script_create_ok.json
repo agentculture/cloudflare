@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": {
+    "id": "afi-proxy",
+    "etag": "test-etag-afi-proxy-12345",
+    "modified_on": "2026-04-23T16:45:00.000000Z",
+    "size": 2330,
+    "handlers": ["fetch"],
+    "compatibility_date": "2026-04-20",
+    "usage_model": "standard"
+  }
+}

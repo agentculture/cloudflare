@@ -46,11 +46,20 @@ token**) with these *additional* scopes on top of the read scopes:
 - **Account · Cloudflare Pages · Edit** (this account) —
   required by `cf-pages-project-create.sh`,
   `cf-pages-deployment-delete.sh`, and
-  `cf-pages-deployments-purge.sh`. Creating a Pages project also
-  needs the **Cloudflare Pages GitHub App** to be installed on the
-  source GitHub owner (org or user) and granted access to the
-  target repo — that's a one-time dashboard / GitHub-admin step this
-  skill cannot automate.
+  `cf-pages-deployments-purge.sh`. Creating a **GitHub-connected**
+  Pages project (no `--direct-upload`) additionally needs the
+  **Cloudflare Pages GitHub App** installed on the source GitHub
+  owner (org or user) with access to the target repo — a one-time
+  dashboard / GitHub-admin step this skill cannot automate.
+  `--direct-upload` projects have no GitHub App dependency.
+- **Account · Workers Scripts · Edit** (this account) —
+  required by `cf-worker-create.sh`. Uploads a Worker script (the
+  subpath-proxy template, typically) via multipart PUT.
+- **Zone · Workers Routes · Edit** (**All zones from AgentCulture**) —
+  required by `cf-workers-route-create.sh`. Per
+  `memory/zone_ids.md`, zone-level scopes on a subset fail with code
+  10000; cover every zone or the route POST will reject even though
+  the dry-run passed.
 
 Swap the token into `.env` when you're about to run a write script,
 then swap back. One token at a time.
@@ -87,6 +96,10 @@ Every write script in this skill follows the same shape:
 | Create a Single Redirect for a zone | `bash .claude/skills/cloudflare-write/scripts/cf-redirect-create.sh FROM_HOST TO_HOST [--www] [--status=301] [--apply] [--json]` |
 | Create a DNS record in a zone | `bash .claude/skills/cloudflare-write/scripts/cf-dns-create.sh ZONE TYPE NAME CONTENT [--proxied] [--ttl=N] [--comment=STR] [--apply] [--json]` |
 | Create a Pages project connected to a GitHub repo | `bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh NAME GITHUB_OWNER REPO_NAME [--clone-from=PROJECT] [...] [--apply] [--json]` |
+| Create a Direct Upload Pages project (no git source) | `bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh NAME --direct-upload [--compatibility-date=DATE] [--apply] [--json]` |
+| Upload a Worker script | `bash .claude/skills/cloudflare-write/scripts/cf-worker-create.sh NAME --from-file=PATH [--module\|--service-worker] [--compatibility-date=DATE] [--apply] [--json]` |
+| Create a Workers route on a zone | `bash .claude/skills/cloudflare-write/scripts/cf-workers-route-create.sh ZONE PATTERN SCRIPT [--apply] [--json]` |
+| Stand up a new `culture.dev/NAME` sub-site (agex-style) | 3 scripts above + `templates/subpath-proxy.js`; see `references/subpath-site-pattern.md` |
 | Delete one Pages deployment | `bash .claude/skills/cloudflare-write/scripts/cf-pages-deployment-delete.sh PROJECT SHORT_ID_OR_ID [--force-canonical] [--apply] [--json]` |
 | Bulk-delete all deployments in a Pages project | `bash .claude/skills/cloudflare-write/scripts/cf-pages-deployments-purge.sh PROJECT [...]` (two-phase, see §3.3) |
 
@@ -179,10 +192,19 @@ duplicates.
 
 ### cf-pages-project-create.sh
 
-Creates a Cloudflare Pages project connected to a GitHub repository.
+Creates a Cloudflare Pages project in either **GitHub-connected**
+mode (default) or **Direct Upload** mode (with `--direct-upload`).
 Mirrors the build + deployment settings of an existing project when
 given `--clone-from=PROJECT`, so "spin up a second project with the
 same style as culture-dev" is one flag, not a dozen.
+
+**Direct Upload vs GitHub-connected** — with `--direct-upload` the
+project has no `source` field, no GitHub App dependency, and
+deployments come from `wrangler pages deploy` / CF's direct-upload
+API rather than auto-builds. That's the mode used by the
+`culture.dev/NAME` sub-site pattern (agex, citation-cli, afi) where
+the consumer repo's own CI builds the site and uploads the finished
+bundle. See `references/subpath-site-pattern.md`.
 
 ```sh
 # Dry-run — shows the full POST body we would send, including the
@@ -193,6 +215,10 @@ bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh \
 # Apply for real:
 bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh \
   culture agentculture culture --clone-from=culture-dev --apply
+
+# Direct Upload variant (agex / citation-cli / afi style — no source):
+bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh \
+  afi --direct-upload --compatibility-date=2026-04-20 --apply
 ```
 
 Positional args:
@@ -201,14 +227,21 @@ Positional args:
   1-58 chars, lowercase alphanumeric + hyphens, no leading/trailing
   hyphen. Enforced locally before the POST.
 - `GITHUB_OWNER` — GitHub org or user that owns the repo
-  (e.g. `agentculture`).
+  (e.g. `agentculture`). **Only with the default GitHub-connected
+  mode.** Omit under `--direct-upload`.
 - `REPO_NAME` — repository name within that owner (e.g. `culture`).
+  Same rule — omit under `--direct-upload`.
 
 Flags:
 
+- `--direct-upload` — create a Direct Upload project (no `source`
+  field in the POST body; deployments happen via `wrangler pages
+  deploy` or direct-upload API calls). Positional args collapse to
+  NAME only; passing OWNER / REPO alongside is an error.
 - `--clone-from=PROJECT` — copy `build_config`, `deployment_configs`,
   and `production_branch` from an existing Pages project in the
-  same account. Individual overrides (below) still win.
+  same account. Works with or without `--direct-upload`. Individual
+  overrides (below) still win.
 - `--production-branch=BRANCH` — git branch that produces
   production deployments. Default `main` (or the cloned value).
 - `--build-command=CMD` — shell command CF runs to build the site.
@@ -238,6 +271,86 @@ something this skill can automate.
 Custom domains (including apex mappings like `culture.dev`) are not
 created by this script; attach them in the Pages dashboard or via a
 follow-on `cf-pages-domain-add.sh` once that lands.
+
+### cf-worker-create.sh
+
+Uploads a Cloudflare Worker script from a local file via the
+multipart `PUT /accounts/:id/workers/scripts/:name` endpoint.
+
+```sh
+# Dry-run (no mutation; prints metadata + a 20-line source preview):
+bash .claude/skills/cloudflare-write/scripts/cf-worker-create.sh \
+  afi-proxy --from-file=/tmp/afi-proxy.js --compatibility-date=2026-04-20
+
+# Apply:
+bash .claude/skills/cloudflare-write/scripts/cf-worker-create.sh \
+  afi-proxy --from-file=/tmp/afi-proxy.js --compatibility-date=2026-04-20 --apply
+```
+
+Positional args:
+
+- `NAME` — Worker script name. 1-63 chars, lowercase alphanumeric
+  plus `_-`, no leading/trailing `_` or `-`. Enforced locally.
+
+Flags:
+
+- `--from-file=PATH` — local `.js` file to upload. Required.
+- `--module` — ES-module format (default). Metadata:
+  `{"main_module":"worker.js", "compatibility_date": ...}`.
+  Part content-type `application/javascript+module`.
+- `--service-worker` — legacy service-worker format. Metadata:
+  `{"body_part":"script", "compatibility_date": ...}`. Part
+  content-type `application/javascript`. Mutually exclusive with
+  `--module`.
+- `--compatibility-date=YYYY-MM-DD` — pins the Workers runtime
+  version. Defaults to today (UTC). Match existing peer Workers to
+  keep behavior consistent — `agex-proxy` uses `2026-04-20`.
+- `--apply` — actually PUT. Without it, dry-run.
+- `--json` — raw CloudFlare response envelope (or simulated body in
+  dry-run).
+
+Idempotency: pre-flight lists the account's Workers scripts and
+refuses with exit 1 if `NAME` already exists. Overwriting an existing
+Worker is a separate (future) `cf-worker-update.sh` responsibility.
+
+### cf-workers-route-create.sh
+
+Creates a Workers route on a zone — binds a Worker script to a URL
+pattern. The route sits at
+`POST /zones/:zone_id/workers/routes` with body
+`{pattern, script}`.
+
+```sh
+# Dry-run:
+bash .claude/skills/cloudflare-write/scripts/cf-workers-route-create.sh \
+  culture.dev 'culture.dev/afi*' afi-proxy
+
+# Apply:
+bash .claude/skills/cloudflare-write/scripts/cf-workers-route-create.sh \
+  culture.dev 'culture.dev/afi*' afi-proxy --apply
+```
+
+Positional args:
+
+- `ZONE` — zone name (e.g. `culture.dev`). Resolved to id via the
+  usual `cf_api_paginated /zones` lookup.
+- `PATTERN` — CF Workers pattern, scheme-less (`culture.dev/afi*`,
+  not `https://culture.dev/afi*`). Quote it in the shell so the
+  globbing doesn't eat the `*`. Scheme-prefixed patterns are
+  rejected up-front.
+- `SCRIPT` — name of an existing Workers script (per
+  `cf-worker-create.sh` naming rules).
+
+Flags:
+
+- `--apply` — actually POST. Without it, dry-run.
+- `--json` — raw CloudFlare response envelope.
+
+Idempotency: pre-flight lists the zone's routes and refuses with
+exit 1 if a route with the identical `{pattern, script}` pair
+already exists. Different scripts mapped to the same pattern (or the
+same script on different patterns) are allowed — only exact dupes
+are refused.
 
 ### 3.3 cf-pages-deployment-delete.sh
 
@@ -371,6 +484,32 @@ This pattern (per-line tick + canary) is the **repo-wide convention
 for any future bulk-destructive script**, not just this one. New
 `cf-*-delete.sh` / `cf-*-purge.sh` scripts should follow the same
 manifest shape.
+
+## 3.5 Sub-site pattern on `culture.dev` (agex-style)
+
+The `culture.dev/agex`, `culture.dev/citation-cli`, and
+`culture.dev/afi` sub-sites share a single three-resource pattern:
+
+1. a **Direct Upload** Pages project `NAME` (see §cf-pages-project-create.sh);
+2. a **Worker** `NAME-proxy` rendered from
+   `templates/subpath-proxy.js` (see §cf-worker-create.sh);
+3. a **Workers route** `culture.dev/NAME*` → `NAME-proxy`
+   (see §cf-workers-route-create.sh).
+
+For the render-and-deploy recipe, zehut/shushu onboarding, and the
+three-URL verification checklist, read the full reference at
+`references/subpath-site-pattern.md`.
+
+## 3.6 Templates and references
+
+- `templates/subpath-proxy.js` — subpath-proxy Worker source, two
+  placeholders (`__SUBPATH__`, `__UPSTREAM__`). Derived from the
+  live `agex-proxy` script and kept deliberately small so updates
+  stay reviewable. Render with `sed` before feeding to
+  `cf-worker-create.sh`.
+- `references/subpath-site-pattern.md` — architecture note for the
+  `culture.dev/NAME` sub-site pattern plus a step-by-step recipe for
+  standing up a new one.
 
 ## 4. Output modes
 

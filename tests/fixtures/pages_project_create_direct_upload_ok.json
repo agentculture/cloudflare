@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": {
+    "name": "afi",
+    "id": "proj-id-afi-new-12345678",
+    "created_on": "2026-04-23T16:30:00.000000Z",
+    "subdomain": "afi.pages.dev",
+    "domains": ["afi.pages.dev"],
+    "production_branch": "main",
+    "source": null,
+    "build_config": {
+      "build_command": "",
+      "destination_dir": "",
+      "root_dir": ""
+    },
+    "deployment_configs": {
+      "preview": {
+        "fail_open": true,
+        "always_use_latest_compatibility_date": false,
+        "compatibility_date": "2026-04-20",
+        "build_image_major_version": 3,
+        "usage_model": "standard"
+      },
+      "production": {
+        "fail_open": true,
+        "always_use_latest_compatibility_date": false,
+        "compatibility_date": "2026-04-20",
+        "build_image_major_version": 3,
+        "usage_model": "standard"
+      }
+    }
+  }
+}
