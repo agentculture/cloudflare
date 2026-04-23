@@ -26,6 +26,15 @@
 #   --compatibility-date=DATE   YYYY-MM-DD (default: today). Pins the
 #                               Workers runtime behavior — upgrade by
 #                               bumping this, never silently.
+#   --no-workers-dev            do NOT enable the Worker's
+#                               NAME.<account>.workers.dev subdomain.
+#                               By default the subdomain is enabled
+#                               after a successful upload, matching
+#                               the live agex-proxy / citation-cli-proxy
+#                               state. Pass this to opt out (e.g. for
+#                               internal Workers that should only run
+#                               on their Workers routes, never at a
+#                               public .workers.dev URL).
 #   --apply                     actually PUT (without it, dry-run)
 #   --json                      raw CF response envelope (or simulated
 #                               body in dry-run)
@@ -42,6 +51,7 @@ apply=0
 from_file=""
 fmt=module
 compat_date=""
+workers_dev=1   # default: enable .workers.dev subdomain (matches agex-proxy)
 positional=()
 
 for arg in "$@"; do
@@ -52,6 +62,7 @@ for arg in "$@"; do
     --module)                 fmt=module ;;
     --service-worker)         fmt=service-worker ;;
     --compatibility-date=*)   compat_date="${arg#*=}" ;;
+    --no-workers-dev)         workers_dev=0 ;;
     -h|--help)
       awk 'NR==1{next} /^#/{sub(/^# ?/, ""); print; next} {exit}' "$0"
       exit 0
@@ -148,6 +159,7 @@ _render_summary_md() {
   printf -- '- **compatibility_date:** %s\n' "$compat_date"
   printf -- '- **from_file:** %s\n' "$from_file"
   printf -- '- **source_bytes:** %s\n' "$(wc -c < "$from_file" | tr -d ' ')"
+  printf -- '- **workers_dev_subdomain:** %s\n' "$([[ $workers_dev -eq 1 ]] && echo enabled || echo disabled)"
   return 0
 }
 
@@ -159,9 +171,11 @@ if (( apply == 0 )); then
           --arg name "$name" \
           --arg from_file "$from_file" \
           --arg fmt "$fmt" \
+          --argjson workers_dev "$workers_dev" \
       '{success: true, errors: [], messages: ["dry-run: no changes applied"],
         result: {dry_run: true, account_id: $account, name: $name,
                  from_file: $from_file, format: $fmt,
+                 workers_dev_subdomain: (if $workers_dev == 1 then "enabled" else "disabled" end),
                  would_put: {metadata: $metadata}}}'
     exit 0
   fi
@@ -174,6 +188,9 @@ if (( apply == 0 )); then
   printf 'worker.js preview (first 20 lines):\n\n```javascript\n'
   head -20 "$from_file"
   printf '```\n'
+  # shellcheck disable=SC2016  # literal backticks wrap markdown inline code
+  printf '\n**would POST** `/accounts/%s/workers/scripts/%s/subdomain` with `{"enabled": %s, "previews_enabled": false}`\n' \
+    "$CLOUDFLARE_ACCOUNT_ID" "$name" "$([[ $workers_dev -eq 1 ]] && echo true || echo false)"
   exit 0
 fi
 
@@ -212,8 +229,30 @@ if ! printf '%s' "$response" | jq -e '.success == true' >/dev/null 2>&1; then
   exit 1
 fi
 
+# Second write: set the `.workers.dev` subdomain state. Required
+# because CF's PUT /workers/scripts/{name} endpoint defaults the
+# subdomain to DISABLED, while the dashboard / wrangler default it
+# to ENABLED. Without this the new Worker isn't reachable at its
+# NAME.<account>.workers.dev URL, which is a silent divergence from
+# agex-proxy / citation-cli-proxy (both `enabled: true`). Same
+# Account · Workers Scripts · Edit scope — no extra permission.
+#
+# NOTE: CF's subdomain endpoint is POST, not PUT. Sending PUT here
+# returns code 10405 "Method not allowed for this authentication
+# scheme" (misleading — the auth is fine, the method is wrong).
+# Keep -X POST.
+subdomain_body=$(jq -n --argjson enabled "$workers_dev" \
+  '{enabled: ($enabled == 1), previews_enabled: false}')
+subdomain_response=$(cf_api \
+  "/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$name/subdomain" \
+  -X POST --data-binary "$subdomain_body")
+
 if [[ "$mode" == "json" ]]; then
-  printf '%s\n' "$response"
+  # Merge the upload response and the subdomain response into one
+  # envelope so downstream jq pipelines see both outcomes.
+  jq -n --argjson upload "$response" --argjson subdomain "$subdomain_response" \
+    '{success: true, errors: [], messages: [],
+      result: {upload: $upload.result, subdomain: $subdomain.result}}'
   exit 0
 fi
 
@@ -222,3 +261,5 @@ etag=$(printf '%s' "$response" | jq -r '.result.etag // "—"')
 modified=$(printf '%s' "$response" | jq -r '.result.modified_on // "—"')
 printf -- '- **etag:** %s\n' "$etag"
 printf -- '- **modified_on:** %s\n' "$modified"
+printf -- '- **workers_dev_enabled:** %s\n' \
+  "$(printf '%s' "$subdomain_response" | jq -r '.result.enabled')"

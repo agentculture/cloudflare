@@ -305,8 +305,18 @@ Flags:
 - `--compatibility-date=YYYY-MM-DD` — pins the Workers runtime
   version. Defaults to today (UTC). Match existing peer Workers to
   keep behavior consistent — `agex-proxy` uses `2026-04-20`.
-- `--apply` — actually PUT. Without it, dry-run.
-- `--json` — raw CloudFlare response envelope (or simulated body in
+- `--no-workers-dev` — suppress the default post-upload
+  enable-workers.dev-subdomain step. By default (match agex-proxy /
+  citation-cli-proxy), the script does two writes: the multipart
+  PUT of the script, then a POST to
+  `/accounts/{id}/workers/scripts/{name}/subdomain` with
+  `{enabled: true, previews_enabled: false}`. The second POST is
+  necessary because CF's upload endpoint leaves the `.workers.dev`
+  subdomain disabled, unlike the dashboard. Use `--no-workers-dev`
+  for private Workers that should only run on Workers routes.
+- `--apply` — actually PUT+POST. Without it, dry-run.
+- `--json` — merged CloudFlare envelope
+  `{success, result: {upload, subdomain}}` (or simulated body in
   dry-run).
 
 Idempotency: pre-flight lists the account's Workers scripts and

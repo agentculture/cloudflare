@@ -72,31 +72,52 @@ _assert_no_mutation() {
 
 # --- apply ---
 
-@test "cf-worker-create.sh --apply PUTs the script and reports etag" {
-  cf_mock "/workers/scripts?per_page"          "workers_scripts_empty.json"
-  cf_mock "/workers/scripts/afi-proxy"         "workers_script_create_ok.json"
+@test "cf-worker-create.sh --apply PUTs the script, enables workers.dev, reports etag" {
+  cf_mock "/workers/scripts?per_page"               "workers_scripts_empty.json"
+  cf_mock "/workers/scripts/afi-proxy"              "workers_script_create_ok.json"
+  cf_mock "/workers/scripts/afi-proxy/subdomain"    "workers_script_subdomain_enabled.json"
   run bash "$WRITE_SCRIPTS/cf-worker-create.sh" afi-proxy \
     --from-file="$WORKER_SRC" --compatibility-date=2026-04-20 --apply
   [ "$status" -eq 0 ]
   [[ "$output" == *"**Worker uploaded**"* ]]
   [[ "$output" == *"test-etag-afi-proxy-12345"* ]]
+  [[ "$output" == *"**workers_dev_enabled:** true"* ]]
   cf_assert_called "-X	PUT"
   cf_assert_called "/accounts/test-account-id/workers/scripts/afi-proxy"
-  # Multipart parts — -F flags are present.
+  cf_assert_called "/accounts/test-account-id/workers/scripts/afi-proxy/subdomain"
+  # Multipart parts — -F flags are present with the filename override
+  # that forces CF to match main_module by filename, not by source path.
   cf_assert_called "metadata=@"
   cf_assert_called "worker.js=@"
   cf_assert_called "application/javascript+module"
+  cf_assert_called ";filename=worker.js"
 }
 
-@test "cf-worker-create.sh --apply --json passes CF envelope through" {
-  cf_mock "/workers/scripts?per_page"  "workers_scripts_empty.json"
-  cf_mock "/workers/scripts/afi-proxy" "workers_script_create_ok.json"
+@test "cf-worker-create.sh --apply --json merges upload + subdomain envelopes" {
+  cf_mock "/workers/scripts?per_page"            "workers_scripts_empty.json"
+  cf_mock "/workers/scripts/afi-proxy"           "workers_script_create_ok.json"
+  cf_mock "/workers/scripts/afi-proxy/subdomain" "workers_script_subdomain_enabled.json"
   run bash "$WRITE_SCRIPTS/cf-worker-create.sh" afi-proxy \
     --from-file="$WORKER_SRC" --apply --json
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.success == true'
-  echo "$output" | jq -e '.result.id == "afi-proxy"'
-  echo "$output" | jq -e '.result.etag == "test-etag-afi-proxy-12345"'
+  echo "$output" | jq -e '.result.upload.id == "afi-proxy"'
+  echo "$output" | jq -e '.result.upload.etag == "test-etag-afi-proxy-12345"'
+  echo "$output" | jq -e '.result.subdomain.enabled == true'
+}
+
+@test "cf-worker-create.sh --apply --no-workers-dev sets subdomain disabled" {
+  cf_mock "/workers/scripts?per_page"            "workers_scripts_empty.json"
+  cf_mock "/workers/scripts/afi-proxy"           "workers_script_create_ok.json"
+  cf_mock "/workers/scripts/afi-proxy/subdomain" "workers_script_subdomain_disabled.json"
+  run bash "$WRITE_SCRIPTS/cf-worker-create.sh" afi-proxy \
+    --from-file="$WORKER_SRC" --apply --no-workers-dev --json
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.result.subdomain.enabled == false'
+  # The request body must carry `enabled: false` — grep the curl log
+  # (jq's default output uses ": " with a space, not the compact form).
+  grep -qE '"enabled":[[:space:]]*false' "$BATS_TEST_TMPDIR/curl.log" \
+    || { echo "expected enabled:false in PUT body, curl log:" >&2; cat "$BATS_TEST_TMPDIR/curl.log" >&2; return 1; }
 }
 
 # --- idempotency & validation ---
