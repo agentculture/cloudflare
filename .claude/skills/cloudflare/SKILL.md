@@ -84,7 +84,7 @@ bash .claude/skills/cloudflare/scripts/cf-pages.sh --json | jq '.result[] | sele
 Scripts take zone/project **names**, not IDs — names are resolved
 internally.
 
-## 4. Inventorying agentirc.dev (Phase 2 prep)
+## 4. Inventorying agentirc.dev before cleanup
 
 `agentirc.dev` is the deprecated domain that's been folded into
 `culture.dev/agentirc`. The Pages deployment needs cleanup; this
@@ -147,7 +147,15 @@ CloudFlare Pages list endpoint rejects `per_page >= 11` with
   PATH stub so tests run offline. The real token is only exercised
   manually or in a separately-configured workflow.
 
-## 7. Adding new read scripts
+## 7. References
+
+- `../cloudflare-write/references/cf-api-gotchas.md` — consolidated
+  CF API quirks. Several apply to reads too: the Pages `per_page`
+  cap that `cf-pages.sh` has to work around (gotcha #1) and the
+  zone-scope 10000 behavior (gotcha #6) both bite read-only
+  callers.
+
+## 8. Adding new read scripts
 
 Follow the pattern every existing script uses:
 

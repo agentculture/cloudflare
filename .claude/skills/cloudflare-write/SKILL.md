@@ -520,6 +520,12 @@ three-URL verification checklist, read the full reference at
 - `references/subpath-site-pattern.md` — architecture note for the
   `culture.dev/NAME` sub-site pattern plus a step-by-step recipe for
   standing up a new one.
+- `references/cf-api-gotchas.md` — consolidated index of CF API
+  quirks we've paid for (Pages `per_page` cap, subdomain auto-suffix,
+  Workers multipart `filename` matching, Workers subdomain endpoint
+  method, Workers subdomain default, zone-scope 10000). Read this
+  before your first live `--apply` against a surface you haven't
+  written to before.
 
 ## 4. Output modes
 

@@ -8,43 +8,46 @@ CloudFlare management for the **AgentCulture OSS** organization, built as Claude
 
 Parent workspace context lives in `../CLAUDE.md`. The global workspace uses uv for Python, but this repo is bash-based (see "Tooling choice" below).
 
-## Current state
+## Before you start
 
-Phase 1 (read-only skills) is complete, and the first write-ops script (Single Redirect creation) has landed in a **separate skill** so read and write stay decoupled. See each skill's `SKILL.md` for user-facing docs (what each script does, when it runs, how to add new scripts).
+**Don't trust this doc for current state — it drifts.** Every session,
+orient against live CF and the skills themselves, in this order:
 
-Layout:
+1. **Live state.** `bash .claude/skills/cloudflare/scripts/cf-status.sh`
+   — single-shot digest of zones, Workers scripts, Workers routes, and
+   Pages projects. Authoritative answer to "what exists right now."
+2. **Skill for your task.** Load `cloudflare` (read-only) or
+   `cloudflare-write` (mutations). Each skill's `SKILL.md` carries
+   its own current script inventory, token-scope requirements, and
+   the pointers to `references/` for architecture notes and the
+   CF API gotchas we've paid for.
+3. **Session memory** (Claude Code session-local, not committed to the
+   repo). Claude Code persists per-project memory under
+   `~/.claude/projects/<slug>/memory/`, where `<slug>` is a
+   filename-safe encoding of this repo's absolute path
+   (e.g. `/home/alice/src/cloudflare` → `-home-alice-src-cloudflare`).
+   Read `MEMORY.md` in that directory for conversation-scoped
+   agreements (site structure, applied-resource IDs, workflow
+   preferences). Only your own sessions have written there — freshly
+   cloned machines start empty.
 
-```text
-.claude/skills/cloudflare/           # read-only inventory skill
-  SKILL.md                           # user-facing skill instructions + trigger phrases
-  scripts/
-    _lib.sh                          # shared helpers: env load, cf_api, cf_api_paginated,
-                                     # cf_output, cf_output_kv, cf_require_account_id
-    cf-whoami.sh                     # verify token status and expiry
-    cf-zones.sh                      # list zones the token can see
-    cf-dns.sh ZONE                   # list DNS records for a zone (resolves name → id)
-    cf-workers.sh                    # list Workers scripts in the account
-    cf-workers-routes.sh             # aggregate Workers routes across every zone
-    cf-pages.sh [PROJECT]            # list Pages projects (or a project's deployments)
-    cf-status.sh                     # single-shot digest of all of the above
-.claude/skills/cloudflare-write/     # write/edit/delete skill — NEEDS SEPARATE TOKEN
-  SKILL.md
-  scripts/
-    _lib.sh                          # symlink → ../../cloudflare/scripts/_lib.sh (DRY)
-    cf-redirect-create.sh            # create a zone Single Redirect (dry-run default, --apply to commit)
-    cf-dns-create.sh                 # create a DNS record in a zone (same safety pattern)
-    cf-pages-project-create.sh       # create a Pages project from a GitHub repo, --clone-from=PROJECT lifts build/deploy config
-.claude/skills/pr-review/            # vendored from ~/.claude/skills — fetch/reply/resolve PR comments
-tests/
-  bats/                              # bats-core unit tests; PATH-injected curl stub for offline mocking
-  fixtures/                          # canned API responses
-  shellcheck.sh                      # shellcheck every shell script in the repo
-  markdownlint.sh                    # markdownlint-cli2 every .md file in the repo
-docs/SETUP.md                        # token creation walkthrough (read token in §1, write token in §1.5)
-.github/workflows/test.yml           # CI: shellcheck + markdownlint + bats on every PR
-```
+## Layout
 
-**Skills split:** `cloudflare` (read) and `cloudflare-write` (write) are discrete skills with separate discovery triggers so agents can't accidentally mutate state while answering an inventory question. Both share `_lib.sh` via symlink — fixes to the helpers apply to both. Write scripts default to dry-run and require `--apply` to actually POST/PUT/DELETE.
+Four skills under `.claude/skills/`:
+
+- `cloudflare/` — read-only inventory (zones, DNS, Workers, Pages, status).
+- `cloudflare-write/` — mutations; dry-run by default, `--apply` to commit.
+  Carries `templates/` and `references/` (including `cf-api-gotchas.md`).
+- `pr-review/` — vendored PR comment fetch/reply/resolve.
+- `poll/` — background reviewer-wait subagent.
+
+Read each skill's `SKILL.md` for its current script inventory — don't
+maintain a duplicate index here. Supporting infrastructure:
+`tests/bats/` + `tests/fixtures/` (offline via PATH-injected curl
+stub), `tests/shellcheck.sh`, `tests/markdownlint.sh`,
+`.github/workflows/test.yml`, `docs/SETUP.md` (token scopes).
+
+**Skills split:** `cloudflare` (read) and `cloudflare-write` (write) are discrete skills with separate discovery triggers so agents can't accidentally mutate state while answering an inventory question. Both share `_lib.sh` via symlink (`cloudflare-write/scripts/_lib.sh` → `../../cloudflare/scripts/_lib.sh`) — fixes to the helpers apply to both. Write scripts default to dry-run and require `--apply` to actually POST/PUT/DELETE.
 
 Pagination is transparent: `cf_api_paginated` in `_lib.sh` walks every page of a list endpoint so scripts see one aggregated `.result`. `shopt -s inherit_errexit` is enabled in `_lib.sh` so `exit 1` inside `cf_api` propagates through the `$(...)` layer `cf_api_paginated` adds — removing this breaks error-path tests silently.
 
@@ -65,10 +68,23 @@ Bash + `curl` + `jq`, no runtime Python deps. Matches the house style in `cultur
 
 ## Roadmap
 
-1. **Phase 1 — read-only skills** ✓ Done. All seven scripts (`cf-whoami`, `cf-zones`, `cf-dns`, `cf-workers`, `cf-workers-routes`, `cf-pages`, `cf-status`) plus pagination, CI, and docs.
-2. **Phase 2 — write skill bootstrap + first redirect** ✓ In progress. Introduces the `cloudflare-write` skill and `cf-redirect-create.sh` (issue #2 — `agentculture.org → culture.dev`). Establishes the dry-run-by-default / `--apply`-to-commit safety pattern that all future `cf-*-create.sh` / `cf-*-update.sh` / `cf-*-delete.sh` scripts will follow.
-3. **Phase 3 — `agentirc.dev` cleanup.** `agentirc.dev` is deprecated. Uses the inventory scripts (`cf-pages`, `cf-dns`, `cf-workers-routes`) as the audit trail, then deletes via new `cf-*-delete.sh` scripts in `cloudflare-write`.
-4. **Later:** multi-domain support, mesh integration, expansion to R2 / Access / Zero Trust, and potentially mixed CloudFlare–AWS workflows.
+1. **Phase 1 — read-only skills** ✓ Done.
+2. **Phase 2 — write skill + create primitives** ✓ Done. Establishes
+   the dry-run-by-default / `--apply`-to-commit pattern all future
+   `cf-*-create.sh` / `cf-*-update.sh` / `cf-*-delete.sh` follow.
+3. **Phase 2.5 — sub-site pattern** ✓ Done for `agex`, `citation-cli`,
+   `afi`; `zehut` and `shushu` pending. Pattern is Direct Upload
+   Pages project + proxy Worker + Workers route — see
+   `cloudflare-write/references/subpath-site-pattern.md`.
+4. **Phase 3 — delete primitives + `agentirc.dev` cleanup.** Needs
+   `cf-pages-project-delete.sh`, `cf-worker-delete.sh`,
+   `cf-workers-route-delete.sh` first, then the audit-then-delete
+   run on `agentirc.dev` (still deprecated, still present).
+5. **Later:** mesh integration, R2 / Access / Zero Trust, mixed
+   CloudFlare–AWS workflows.
+
+Because this drifts: `cf-status.sh` is authoritative for what
+exists; this section is authoritative for *what we plan next*.
 
 ## Conventions for adding code
 
@@ -95,7 +111,3 @@ All work goes through a feature branch + PR + automated review cycle (qodo, Copi
 - **After `gh pr create`, immediately invoke the `poll` skill.** It spawns a background subagent that watches the PR and notifies you only when both qodo and Copilot have finished. Cheaper than self-paced wakeups because the main session doesn't burn context on heartbeats. See `.claude/skills/poll/SKILL.md`.
 - **Fetch ALL review feedback with one call:** `bash .claude/skills/pr-review/scripts/pr-comments.sh <PR>`. It returns inline comments, issue comments, top-level reviews, and SonarCloud new issues in a single pass — don't hand-roll `gh api` / `curl sonarcloud.io` calls.
 - **Triage / reply / resolve** via the `pr-review` skill once the poll wakes you.
-
-## Active design context
-
-Live design decisions (scope, auth shape, skill layout, phase-1 targets) are tracked in `/home/spark/.claude/projects/-home-spark-git-cloudflare/memory/` — read `MEMORY.md` there at the start of a session if you need the current state of the conversation's working agreements.
