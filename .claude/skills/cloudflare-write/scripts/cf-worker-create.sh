@@ -148,6 +148,7 @@ _render_summary_md() {
   printf -- '- **compatibility_date:** %s\n' "$compat_date"
   printf -- '- **from_file:** %s\n' "$from_file"
   printf -- '- **source_bytes:** %s\n' "$(wc -c < "$from_file" | tr -d ' ')"
+  return 0
 }
 
 if (( apply == 0 )); then

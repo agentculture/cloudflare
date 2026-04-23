@@ -131,6 +131,7 @@ _render_summary_md() {
   printf -- '- **zone:** %s (id=%s)\n' "$zone_name" "$zone_id"
   printf -- '- **pattern:** %s\n' "$pattern"
   printf -- '- **script:** %s\n' "$script_name"
+  return 0
 }
 
 if (( apply == 0 )); then
