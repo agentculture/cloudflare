@@ -184,6 +184,15 @@ fi
 # Content-Type + boundary automatically. We write metadata to a
 # temp file so curl's @-reference reads it byte-for-byte without
 # shell re-quoting surprises.
+#
+# IMPORTANT: `-F "name=@path"` makes curl emit
+# `Content-Disposition: form-data; name="worker.js"; filename="afi-proxy.js"`
+# — the filename comes from the source path's basename. CF's module
+# resolver then complains with code 10021 "No such module: worker.js"
+# because `main_module` points at `worker.js` but the only part CF
+# sees is `filename="afi-proxy.js"`. The fix is `;filename=worker.js`
+# which overrides the filename regardless of the source path. Keep
+# this — removing it breaks every apply against the live API.
 meta_tmp=$(mktemp "${TMPDIR:-/tmp}/cf-worker-metadata.XXXXXX.json")
 trap 'rm -f "$meta_tmp"' EXIT
 printf '%s' "$metadata" > "$meta_tmp"
@@ -193,8 +202,8 @@ url_upload="$CF_API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$name"
 # which would conflict with the multipart boundary curl computes.
 response=$(curl -sS -X PUT \
   -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-  -F "metadata=@$meta_tmp;type=application/json" \
-  -F "worker.js=@$from_file;type=$part_ct" \
+  -F "metadata=@$meta_tmp;type=application/json;filename=metadata.json" \
+  -F "worker.js=@$from_file;type=$part_ct;filename=worker.js" \
   "$url_upload")
 
 if ! printf '%s' "$response" | jq -e '.success == true' >/dev/null 2>&1; then

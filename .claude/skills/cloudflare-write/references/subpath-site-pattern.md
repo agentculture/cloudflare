@@ -51,20 +51,7 @@ upstream.
 Tooling: the three scripts in `cloudflare-write/scripts/` plus the
 template at `cloudflare-write/templates/subpath-proxy.js`.
 
-### 1. Render the proxy Worker source
-
-```sh
-mkdir -p /tmp/foo-provision
-sed -e 's/__SUBPATH__/foo/g' \
-    -e 's|__UPSTREAM__|https://foo.pages.dev|g' \
-    .claude/skills/cloudflare-write/templates/subpath-proxy.js \
-    > /tmp/foo-provision/foo-proxy.js
-```
-
-Two placeholders, both double-underscored to keep sed substitution
-unambiguous: `__SUBPATH__` and `__UPSTREAM__`.
-
-### 2. Create the Pages project (Direct Upload)
+### 1. Create the Pages project first (to learn the real subdomain)
 
 ```sh
 # Dry-run first — inspect the POST body:
@@ -78,6 +65,35 @@ bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh \
 Match the `--compatibility-date` to whatever the existing sub-sites
 use (as of 2026-04-23: `2026-04-20`, verified on `agex-proxy`). Pin
 it — don't let CF choose a default that can drift.
+
+**Gotcha — subdomain auto-suffixing.** The apply output's
+`**subdomain:**` field is the real `*.pages.dev` hostname. It is
+usually `foo.pages.dev`, but CF auto-suffixes any name that collides
+with the platform pool: `culture` got `culture-72d.pages.dev`, `afi`
+got `afi-bn9.pages.dev`. **Record whatever the apply prints** —
+don't assume `foo.pages.dev`. You'll wire that exact hostname into
+the proxy Worker in the next step.
+
+Alternative (read-only) way to recover the subdomain later:
+
+```sh
+bash .claude/skills/cloudflare/scripts/cf-pages.sh --json \
+  | jq -r '.result[] | select(.name == "foo") | .subdomain'
+```
+
+### 2. Render the proxy Worker source (using the real subdomain)
+
+```sh
+mkdir -p /tmp/foo-provision
+# Use the subdomain from step 1's apply output, NOT a guess:
+sed -e 's/__SUBPATH__/foo/g' \
+    -e 's|__UPSTREAM__|https://REAL-SUBDOMAIN|g' \
+    .claude/skills/cloudflare-write/templates/subpath-proxy.js \
+    > /tmp/foo-provision/foo-proxy.js
+```
+
+Two placeholders, both double-underscored to keep sed substitution
+unambiguous: `__SUBPATH__` and `__UPSTREAM__`.
 
 ### 3. Upload the proxy Worker
 
