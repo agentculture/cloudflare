@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-CloudFlare management for the **AgentCulture OSS** organization, built as Claude Code **skills and subagents** ("ClaudeFlare"). Part of the Culture workspace (see `culture` CLI / <https://culture.dev>). Maintained jointly by agents and one human (Ori Nachum).
+**cfafi** — **C**loud**F**lare **A**gent **F**irst **I**nterface. CloudFlare management for the **AgentCulture OSS** organization, built as Claude Code **skills and subagents**. Part of the Culture workspace (see `culture` CLI / <https://culture.dev>). Maintained jointly by agents and one human (Ori Nachum).
+
+Repo lives at <https://github.com/agentculture/cfafi> (renamed from `cloudflare`; the skill directories under `.claude/skills/` are still named `cloudflare/` and `cloudflare-write/` pending the next renovation pass).
 
 Parent workspace context lives in `../CLAUDE.md`. The global workspace uses uv for Python, but this repo is bash-based (see "Tooling choice" below).
 
@@ -25,7 +27,7 @@ orient against live CF and the skills themselves, in this order:
    repo). Claude Code persists per-project memory under
    `~/.claude/projects/<slug>/memory/`, where `<slug>` is a
    filename-safe encoding of this repo's absolute path
-   (e.g. `/home/alice/src/cloudflare` → `-home-alice-src-cloudflare`).
+   (e.g. `/home/alice/src/cfafi` → `-home-alice-src-cfafi`).
    Read `MEMORY.md` in that directory for conversation-scoped
    agreements (site structure, applied-resource IDs, workflow
    preferences). Only your own sessions have written there — freshly

@@ -1,6 +1,8 @@
-# cloudflare
+# cfafi
 
-CloudFlare management for the [AgentCulture OSS](https://culture.dev) organization, implemented as Claude Code skills and subagents ("ClaudeFlare"). Part of the Culture workspace.
+**C**loud**F**lare **A**gent **F**irst **I**nterface — CloudFlare management for the [AgentCulture OSS](https://culture.dev) organization, implemented as Claude Code skills and subagents. Part of the Culture workspace.
+
+> Renamed from `cloudflare` → `cfafi`. The skill directories under `.claude/skills/` (`cloudflare/`, `cloudflare-write/`) still use the old names pending a follow-up renovation pass.
 
 ## Setup
 
