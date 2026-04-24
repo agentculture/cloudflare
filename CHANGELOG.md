@@ -4,6 +4,14 @@ All notable changes to this project will be documented here. The format
 is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-04-24
+
+
+### Fixed
+
+- SonarCloud python:S3516 BLOCKER on cmd_whoami, cmd_zones_list, cmd_dns_create — handlers now return None (implicit) instead of explicit return 0; _dispatch already coerces None to exit 0
+- SonarCloud shelldre:S7688 MAJOR on scripts/lint-md.sh — use [[ instead of [ for conditional tests
+
 ## [0.1.1] - 2026-04-24
 
 ### Changed

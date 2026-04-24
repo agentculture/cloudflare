@@ -65,7 +65,11 @@ def _body(record_type: str, name: str, content: str, ttl: int, proxied: bool, co
     }
 
 
-def cmd_dns_create(args: argparse.Namespace) -> int:
+def cmd_dns_create(args: argparse.Namespace) -> None:
+    """Success paths fall off the end (implicit None); errors raise CfafiError.
+
+    See cmd_whoami for the rationale on not returning explicit ``0``.
+    """
     if args.type not in _SUPPORTED_TYPES:
         raise CfafiError(
             code=EXIT_USER_ERROR,
@@ -98,24 +102,24 @@ def cmd_dns_create(args: argparse.Namespace) -> int:
                 "success": True, "errors": [], "messages": ["dry-run: no changes applied"],
                 "result": {"dry_run": True, "zone_id": zone_id, "would_post": body},
             })
-            return 0
-        emit_result("**Dry-run — no changes applied**\n", json_mode=False)
-        emit_kv([
-            ("zone", f"{args.zone} (id={zone_id})"),
-            ("type", args.type),
-            ("name", args.name),
-            ("content", args.content),
-            ("ttl", f"{args.ttl}{' (automatic)' if args.ttl == 1 else ''}"),
-            ("proxied", args.proxied),
-        ])
-        emit_result(f"\n**would POST** `/zones/{zone_id}/dns_records`:\n", json_mode=False)
-        emit_result("```json\n" + _json.dumps(body, indent=2) + "\n```", json_mode=False)
-        return 0
+        else:
+            emit_result("**Dry-run — no changes applied**\n", json_mode=False)
+            emit_kv([
+                ("zone", f"{args.zone} (id={zone_id})"),
+                ("type", args.type),
+                ("name", args.name),
+                ("content", args.content),
+                ("ttl", f"{args.ttl}{' (automatic)' if args.ttl == 1 else ''}"),
+                ("proxied", args.proxied),
+            ])
+            emit_result(f"\n**would POST** `/zones/{zone_id}/dns_records`:\n", json_mode=False)
+            emit_result("```json\n" + _json.dumps(body, indent=2) + "\n```", json_mode=False)
+        return
 
     response = _api.http_request("POST", f"/zones/{zone_id}/dns_records", payload=body)
     if json_mode:
         emit_json(response)
-        return 0
+        return
     new_id = (response.get("result") or {}).get("id", "—")
     emit_result("**DNS record created**\n", json_mode=False)
     emit_kv([
@@ -127,7 +131,6 @@ def cmd_dns_create(args: argparse.Namespace) -> int:
         ("proxied", args.proxied),
         ("record_id", new_id),
     ])
-    return 0
 
 
 def register(sub: argparse._SubParsersAction) -> None:

@@ -8,7 +8,8 @@ import cfafi._api as _api
 from cfafi.cli._output import emit_json, emit_result, emit_table
 
 
-def cmd_zones_list(args: argparse.Namespace) -> int:
+def cmd_zones_list(args: argparse.Namespace) -> None:
+    """Success path falls off the end (implicit None). See cmd_whoami for rationale."""
     rows = list(_api.paginate("/zones"))
     json_mode = bool(getattr(args, "json", False))
     if json_mode:
@@ -25,21 +26,20 @@ def cmd_zones_list(args: argparse.Namespace) -> int:
             },
         }
         emit_json(envelope)
-        return 0
-    emit_result(f"## Zones ({len(rows)})\n", json_mode=False)
-    emit_table(
-        headers=["ID", "NAME", "STATUS", "PLAN"],
-        rows=[
-            [
-                z.get("id", "—"),
-                z.get("name", "—"),
-                z.get("status", "—"),
-                (z.get("plan") or {}).get("name") or "—",
-            ]
-            for z in rows
-        ],
-    )
-    return 0
+    else:
+        emit_result(f"## Zones ({len(rows)})\n", json_mode=False)
+        emit_table(
+            headers=["ID", "NAME", "STATUS", "PLAN"],
+            rows=[
+                [
+                    z.get("id", "—"),
+                    z.get("name", "—"),
+                    z.get("status", "—"),
+                    (z.get("plan") or {}).get("name") or "—",
+                ]
+                for z in rows
+            ],
+        )
 
 
 def register(sub: argparse._SubParsersAction) -> None:

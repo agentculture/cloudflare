@@ -12,9 +12,9 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-if [ $# -eq 0 ]; then
+if [[ $# -eq 0 ]]; then
   mapfile -t files < <(git ls-files '*.md')
-  if [ ${#files[@]} -eq 0 ]; then
+  if [[ ${#files[@]} -eq 0 ]]; then
     echo "No tracked markdown files."
     exit 0
   fi

@@ -1,6 +1,6 @@
 [project]
 name = "cfafi"
-version = "0.1.1"
+version = "0.1.2"
 description = "CloudFlare Agent First Interface — agent-first CLI for CloudFlare management in the AgentCulture org."
 readme = "README.md"
 license = "MIT"

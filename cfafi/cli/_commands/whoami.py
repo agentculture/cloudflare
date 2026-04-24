@@ -12,21 +12,25 @@ import cfafi._api as _api
 from cfafi.cli._output import emit_json, emit_kv, emit_result
 
 
-def cmd_whoami(args: argparse.Namespace) -> int:
+def cmd_whoami(args: argparse.Namespace) -> None:
+    """Success path falls off the end (implicit None); errors raise CfafiError.
+
+    _dispatch coerces None to exit 0. Keeping this implicit avoids S3516
+    "method always returns the same value" on an unconditional ``return 0``.
+    """
     response = _api.http_request("GET", "/user/tokens/verify")
     json_mode = bool(getattr(args, "json", False))
     if json_mode:
         emit_json(response)
-        return 0
-    result = response.get("result") or {}
-    emit_result("**CloudFlare token**", json_mode=False)
-    emit_kv([
-        ("id", result.get("id", "—")),
-        ("status", result.get("status", "—")),
-        ("not_before", result.get("not_before") or "—"),
-        ("expires_on", result.get("expires_on") or "never"),
-    ])
-    return 0
+    else:
+        result = response.get("result") or {}
+        emit_result("**CloudFlare token**", json_mode=False)
+        emit_kv([
+            ("id", result.get("id", "—")),
+            ("status", result.get("status", "—")),
+            ("not_before", result.get("not_before") or "—"),
+            ("expires_on", result.get("expires_on") or "never"),
+        ])
 
 
 def register(sub: argparse._SubParsersAction) -> None:
