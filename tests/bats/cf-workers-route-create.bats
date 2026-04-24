@@ -4,7 +4,7 @@ load test_helper
 
 setup() {
   cf_bats_setup
-  WRITE_SCRIPTS="$SKILL_DIR/../cloudflare-write/scripts"
+  WRITE_SCRIPTS="$SKILL_DIR/../cfafi-write/scripts"
 }
 
 _assert_no_post() {

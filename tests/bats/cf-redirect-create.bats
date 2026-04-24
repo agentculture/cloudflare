@@ -8,7 +8,7 @@ setup() {
   # GET URLs include `?per_page=...` via cf_api_paginated; POST is a bare path.
   # Longest-substring-wins differentiates the rulesets GET vs POST mocks
   # without teaching the stub about HTTP methods.
-  WRITE_SCRIPTS="$SKILL_DIR/../cloudflare-write/scripts"
+  WRITE_SCRIPTS="$SKILL_DIR/../cfafi-write/scripts"
 }
 
 # Helper — asserts curl was NEVER invoked with `-X POST`.

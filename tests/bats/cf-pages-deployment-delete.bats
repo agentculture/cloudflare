@@ -4,7 +4,7 @@ load test_helper
 
 setup() {
   cf_bats_setup
-  WRITE_SCRIPTS="$SKILL_DIR/../cloudflare-write/scripts"
+  WRITE_SCRIPTS="$SKILL_DIR/../cfafi-write/scripts"
   # Project-detail GET, deployments list, and DELETE all go through the
   # same /accounts/.../pages/projects/agentirc-dev/... prefix. The stub's
   # longest-substring-wins policy disambiguates by URL suffix.

@@ -15,7 +15,7 @@ cf_bats_setup() {
 
   # Paths the tests reach into, exposed as globals for brevity in @test blocks.
   # shellcheck disable=SC2034  # consumed by bats files that `load test_helper`
-  SKILL_DIR="$BATS_TEST_DIRNAME/../../.claude/skills/cloudflare"
+  SKILL_DIR="$BATS_TEST_DIRNAME/../../.claude/skills/cfafi"
   # shellcheck disable=SC2034  # consumed by bats files that `load test_helper`
   SKILL_SCRIPTS="$SKILL_DIR/scripts"
   return 0

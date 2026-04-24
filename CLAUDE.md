@@ -6,20 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **cfafi** — **C**loud**F**lare **A**gent **F**irst **I**nterface. CloudFlare management for the **AgentCulture OSS** organization, built as Claude Code **skills and subagents**. Part of the Culture workspace (see `culture` CLI / <https://culture.dev>). Maintained jointly by agents and one human (Ori Nachum).
 
-Repo lives at <https://github.com/agentculture/cfafi> (renamed from `cloudflare`; the skill directories under `.claude/skills/` are still named `cloudflare/` and `cloudflare-write/` pending the next renovation pass).
+Repo lives at <https://github.com/agentculture/cfafi>. Skill directories under `.claude/skills/` are now `cfafi/` (read) and `cfafi-write/` (write) after the v0.1.0 renovation pass.
 
-Parent workspace context lives in `../CLAUDE.md`. The global workspace uses uv for Python, but this repo is bash-based (see "Tooling choice" below).
+Parent workspace context lives in `../CLAUDE.md`. The global workspace uses uv for Python; this repo now ships both a Python CLI (`cfafi`, installed via `uv tool install cfafi`) and bash skills (see "Tooling choice" below).
 
 ## Before you start
 
 **Don't trust this doc for current state — it drifts.** Every session,
 orient against live CF and the skills themselves, in this order:
 
-1. **Live state.** `bash .claude/skills/cloudflare/scripts/cf-status.sh`
+1. **Live state.** `bash .claude/skills/cfafi/scripts/cf-status.sh`
    — single-shot digest of zones, Workers scripts, Workers routes, and
    Pages projects. Authoritative answer to "what exists right now."
-2. **Skill for your task.** Load `cloudflare` (read-only) or
-   `cloudflare-write` (mutations). Each skill's `SKILL.md` carries
+2. **Skill for your task.** Load `cfafi` (read-only) or
+   `cfafi-write` (mutations). Each skill's `SKILL.md` carries
    its own current script inventory, token-scope requirements, and
    the pointers to `references/` for architecture notes and the
    CF API gotchas we've paid for.
@@ -37,11 +37,12 @@ orient against live CF and the skills themselves, in this order:
 
 Four skills under `.claude/skills/`:
 
-- `cloudflare/` — read-only inventory (zones, DNS, Workers, Pages, status).
-- `cloudflare-write/` — mutations; dry-run by default, `--apply` to commit.
+- `cfafi/` — read-only inventory (zones, DNS, Workers, Pages, status).
+- `cfafi-write/` — mutations; dry-run by default, `--apply` to commit.
   Carries `templates/` and `references/` (including `cf-api-gotchas.md`).
 - `pr-review/` — vendored PR comment fetch/reply/resolve.
 - `poll/` — background reviewer-wait subagent.
+- `cfafi/` (package) — Python CLI installed via `uv tool install cfafi`; entry point `cfafi`. Noun/verb surface (`cfafi <noun> <verb>`) with markdown-default + `--json` output and dry-run / `--apply` safety for mutations. See `pyproject.toml` and `docs/superpowers/specs/2026-04-24-cfafi-v0.1.0-python-cli-design.md`.
 
 Read each skill's `SKILL.md` for its current script inventory — don't
 maintain a duplicate index here. Supporting infrastructure:
@@ -49,19 +50,21 @@ maintain a duplicate index here. Supporting infrastructure:
 stub), `tests/shellcheck.sh`, `tests/markdownlint.sh`,
 `.github/workflows/test.yml`, `docs/SETUP.md` (token scopes).
 
-**Skills split:** `cloudflare` (read) and `cloudflare-write` (write) are discrete skills with separate discovery triggers so agents can't accidentally mutate state while answering an inventory question. Both share `_lib.sh` via symlink (`cloudflare-write/scripts/_lib.sh` → `../../cloudflare/scripts/_lib.sh`) — fixes to the helpers apply to both. Write scripts default to dry-run and require `--apply` to actually POST/PUT/DELETE.
+**Skills split:** `cfafi` (read) and `cfafi-write` (write) are discrete skills with separate discovery triggers so agents can't accidentally mutate state while answering an inventory question. Both share `_lib.sh` via symlink (`cfafi-write/scripts/_lib.sh` → `../../cfafi/scripts/_lib.sh`) — fixes to the helpers apply to both. Write scripts default to dry-run and require `--apply` to actually POST/PUT/DELETE.
 
 Pagination is transparent: `cf_api_paginated` in `_lib.sh` walks every page of a list endpoint so scripts see one aggregated `.result`. `shopt -s inherit_errexit` is enabled in `_lib.sh` so `exit 1` inside `cf_api` propagates through the `$(...)` layer `cf_api_paginated` adds — removing this breaks error-path tests silently.
 
 ## Hard constraints
 
-- **Do not join the culture mesh from this repo.** Ori will signal when it's time. Until then, skills are invoked locally in Claude Code but must be designed as if a mesh peer will call them later: stable CLI interfaces, deterministic output, structured enough for another agent to parse.
+- **Culture mesh:** This repo is cleared to join the mesh. A follow-up PR will init the agent config and join the `spark` server. Until then, treat mesh calls as a future integration point — design any new interface with that in mind (stable CLI, deterministic output, structured-enough for a peer agent to parse).
 - **Credentials never live in the repo.** The CloudFlare API token goes in a `.env` file at the repo root (gitignored). `CLOUDFLARE_API_TOKEN` is the env var name; `CLOUDFLARE_ACCOUNT_ID` is also expected for account-scoped endpoints. `_lib.sh` loads `.env` on import with a safe `KEY=VALUE` parser — no `source`, no shell execution.
 - **Ownership model:** CloudFlare responsibility is earned through work and can be split across multiple agents by domain or resource area. Skills must therefore be parameterized by zone/account — never hardcode `culture.dev` or a specific account ID in skill logic; take it as an arg or from env.
 
 ## Tooling choice
 
-Bash + `curl` + `jq`, no runtime Python deps. Matches the house style in `culture/` and `citation-cli/`. `wrangler` CLI and the official SDK are acceptable for one-off needs, but skills should default to REST via `curl` for a uniform surface across DNS/Workers/Pages/account and to avoid stateful `wrangler login` under a dedicated agent user.
+**Python CLI (`cfafi`):** The installed `cfafi` CLI is the preferred surface for all verbs that have been ported. Install with `uv tool install cfafi`. The package has zero runtime dependencies — `pyproject.toml` declares `dependencies = []` and HTTP is done via stdlib `urllib`. Keeps the install fast, the surface auditable, and matches afi-cli's house style.
+
+**Bash skills (coexistence):** Bash + `curl` + `jq` remains the implementation language for bash scripts under `.claude/skills/cfafi/scripts/` and `.claude/skills/cfafi-write/scripts/`. Matches the house style in `culture/` and `citation-cli/`. `wrangler` CLI and the official SDK are acceptable for one-off needs, but bash skills default to REST via `curl` for a uniform surface across DNS/Workers/Pages/account and to avoid stateful `wrangler login` under a dedicated agent user. Bash scripts remain supported for verbs not yet ported to the Python CLI — tracked in `docs/superpowers/specs/2026-04-24-cfafi-v0.1.0-python-cli-design.md` § "Subsequent PRs".
 
 ## Output conventions
 
@@ -77,7 +80,7 @@ Bash + `curl` + `jq`, no runtime Python deps. Matches the house style in `cultur
 3. **Phase 2.5 — sub-site pattern** ✓ Done for `agex`, `citation-cli`,
    `afi`; `zehut` and `shushu` pending. Pattern is Direct Upload
    Pages project + proxy Worker + Workers route — see
-   `cloudflare-write/references/subpath-site-pattern.md`.
+   `cfafi-write/references/subpath-site-pattern.md`.
 4. **Phase 3 — delete primitives + `agentirc.dev` cleanup.** Needs
    `cf-pages-project-delete.sh`, `cf-worker-delete.sh`,
    `cf-workers-route-delete.sh` first, then the audit-then-delete
@@ -95,6 +98,7 @@ exists; this section is authoritative for *what we plan next*.
 - **Every list script uses `cf_api_paginated`.** Single-object endpoints (e.g. `/user/tokens/verify`) use `cf_api` directly.
 - **Agent-readable default, `--json` opt-in.** Markdown tables for lists, markdown key-value for single objects, raw JSON only when explicitly requested.
 - **Every new script ships with a bats file under `tests/bats/` and at least one fixture under `tests/fixtures/`.** CI runs them all on every PR.
+- **Every PR bumps the version.** Even docs / CI / config changes. Run `python3 .claude/skills/version-bump/scripts/bump.py {patch,minor,major}` with a JSON changelog on stdin (see `.claude/skills/version-bump/SKILL.md`). The `version-check` CI job fails PRs that don't bump.
 
 ## PR workflow
 

@@ -4,7 +4,7 @@ load test_helper
 
 setup() {
   cf_bats_setup
-  WRITE_SCRIPTS="$SKILL_DIR/../cloudflare-write/scripts"
+  WRITE_SCRIPTS="$SKILL_DIR/../cfafi-write/scripts"
   PURGE_SCRIPT="$WRITE_SCRIPTS/cf-pages-deployments-purge.sh"
   # Dedicated per-test manifest dir so runs don't stomp on each other.
   MANIFEST_DIR="$BATS_TEST_TMPDIR/manifests"

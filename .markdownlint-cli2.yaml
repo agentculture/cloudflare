@@ -1,13 +1,18 @@
-# markdownlint-cli2 config for the cfafi repo.
-# Mirrors the workspace's global ~/.markdownlint-cli2.yaml so clones get
-# identical behaviour without depending on per-machine setup.
+# markdownlint-cli2 config for cfafi.
+# markdownlint-cli2 stops walking at the git root, so the user's global
+# ~/.markdownlint-cli2.yaml isn't picked up from inside the repo.
+# Keep this file aligned with the global preset.
 
 config:
   default: true
-  # MD013: Line length — disabled (too noisy for docs/skills with prose).
+  # MD013: Line length — disabled. Prose lines wrap at the reader.
   MD013: false
-  # MD060: Table pipe spacing — stylistic, disabled in global config.
+  # MD060: Table pipe spacing — disabled (stylistic preference).
   MD060: false
+  # MD024: Duplicate headings — allow under different parents so Keep a
+  # Changelog entries can each have ### Added / ### Changed / ### Fixed.
+  MD024:
+    siblings_only: true
 
 ignores:
   - "node_modules/**"
@@ -18,3 +23,8 @@ ignores:
   # ignore, a stale manifest on disk breaks local `bash tests/markdownlint.sh`
   # runs even though CI never sees the file (it's gitignored).
   - ".cf-purge-manifests/**"
+  # docs/superpowers/ holds spec + plan artifacts that nest long code
+  # blocks (file contents shown as literal ``` fences). Those blocks
+  # legitimately have no language tag, and re-tagging them all would be
+  # noise. These files aren't user-facing CLI docs.
+  - "docs/superpowers/**"

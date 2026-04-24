@@ -4,7 +4,7 @@ load test_helper
 
 setup() {
   cf_bats_setup
-  WRITE_SCRIPTS="$SKILL_DIR/../cloudflare-write/scripts"
+  WRITE_SCRIPTS="$SKILL_DIR/../cfafi-write/scripts"
   # Minimal worker source used across tests. Content is irrelevant
   # for the curl-stub harness — it only shows up in the source
   # preview (markdown mode) and in --from-file byte-count reporting.
