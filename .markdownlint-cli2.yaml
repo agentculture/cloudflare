@@ -23,3 +23,8 @@ ignores:
   # ignore, a stale manifest on disk breaks local `bash tests/markdownlint.sh`
   # runs even though CI never sees the file (it's gitignored).
   - ".cf-purge-manifests/**"
+  # docs/superpowers/ holds spec + plan artifacts that nest long code
+  # blocks (file contents shown as literal ``` fences). Those blocks
+  # legitimately have no language tag, and re-tagging them all would be
+  # noise. These files aren't user-facing CLI docs.
+  - "docs/superpowers/**"
