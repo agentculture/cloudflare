@@ -9,8 +9,8 @@ def test_zones_list_markdown(http_stub, capsys):
     http_stub.queue({
         "success": True, "errors": [], "messages": [],
         "result": [
-            {"id": "z1", "name": "culture.dev", "status": "active", "plan": {"name": "Free Website"}},
-            {"id": "z2", "name": "agentirc.dev", "status": "active", "plan": {"name": "Free Website"}},
+            {"id": "z1", "name": "culture.dev", "status": "active", "plan": {"name": "Free Website"}},  # noqa: E501
+            {"id": "z2", "name": "agentirc.dev", "status": "active", "plan": {"name": "Free Website"}},  # noqa: E501
         ],
         "result_info": {"page": 1, "total_pages": 1, "count": 2, "total_count": 2},
     })
@@ -27,12 +27,12 @@ def test_zones_list_json_wraps_paginated_result(http_stub, capsys):
     http_stub.queue(
         {
             "success": True, "errors": [], "messages": [],
-            "result": [{"id": "z1", "name": "culture.dev", "status": "active", "plan": {"name": "Free"}}],
+            "result": [{"id": "z1", "name": "culture.dev", "status": "active", "plan": {"name": "Free"}}],  # noqa: E501
             "result_info": {"page": 1, "total_pages": 2, "count": 1, "total_count": 2},
         },
         {
             "success": True, "errors": [], "messages": [],
-            "result": [{"id": "z2", "name": "agentirc.dev", "status": "active", "plan": {"name": "Free"}}],
+            "result": [{"id": "z2", "name": "agentirc.dev", "status": "active", "plan": {"name": "Free"}}],  # noqa: E501
             "result_info": {"page": 2, "total_pages": 2, "count": 1, "total_count": 2},
         },
     )

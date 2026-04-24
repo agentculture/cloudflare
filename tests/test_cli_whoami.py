@@ -2,8 +2,6 @@
 
 import json
 
-import pytest
-
 from cfafi.cli import main
 from cfafi.cli._errors import EXIT_AUTH, CfafiError
 

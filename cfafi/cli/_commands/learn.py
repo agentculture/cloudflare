@@ -90,7 +90,7 @@ def _json_payload() -> dict[str, object]:
             "4": "upstream API error",
         },
         "env": {
-            "CLOUDFLARE_API_TOKEN": "required",
+            "CLOUDFLARE_API_TOKEN": "required",  # noqa: S105
             "CLOUDFLARE_ACCOUNT_ID": "required for Pages/Workers account-scoped verbs",
         },
         "secure_loading": (

@@ -2,10 +2,8 @@
 
 import json
 
-import pytest
-
 from cfafi.cli import main
-from cfafi.cli._errors import CfafiError, EXIT_USER_ERROR
+from cfafi.cli._errors import EXIT_USER_ERROR
 
 
 def _zones_envelope(*names_ids):
@@ -93,7 +91,7 @@ def test_dns_create_idempotency_existing_record(http_stub, capsys):
         _zones_envelope(("culture.dev", "zid-1")),
         {
             "success": True, "errors": [], "messages": [],
-            "result": [{"id": "rec-existing", "type": "A", "name": "www.culture.dev", "content": "1.2.3.4"}],
+            "result": [{"id": "rec-existing", "type": "A", "name": "www.culture.dev", "content": "1.2.3.4"}],  # noqa: E501
             "result_info": {"page": 1, "total_pages": 1},
         },
     )

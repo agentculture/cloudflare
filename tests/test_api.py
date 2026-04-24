@@ -36,14 +36,14 @@ def test_http_request_sends_bearer_token_and_parses_json():
 
 
 def test_http_request_encodes_query_string():
-    with patch("cfafi._api.urllib.request.urlopen", return_value=_ok_resp({"success": True})) as mock:
+    with patch("cfafi._api.urllib.request.urlopen", return_value=_ok_resp({"success": True})) as mock:  # noqa: E501
         http_request("GET", "/zones", query={"name": "culture.dev", "page": 2})
     url = mock.call_args[0][0].full_url
     assert "name=culture.dev" in url and "page=2" in url
 
 
 def test_http_request_sends_json_payload_on_post():
-    with patch("cfafi._api.urllib.request.urlopen", return_value=_ok_resp({"success": True})) as mock:
+    with patch("cfafi._api.urllib.request.urlopen", return_value=_ok_resp({"success": True})) as mock:  # noqa: E501
         http_request("POST", "/zones/zid/dns_records", payload={"type": "A", "name": "x"})
     req = mock.call_args[0][0]
     assert req.get_method() == "POST"

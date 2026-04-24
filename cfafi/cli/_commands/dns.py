@@ -28,7 +28,10 @@ def _validate_ttl(ttl: int, *, proxied: bool) -> None:
     if proxied and ttl != 1:
         raise CfafiError(
             code=EXIT_USER_ERROR,
-            message="--proxied records must use --ttl=1 (CloudFlare ignores manual TTL on proxied records)",
+            message=(
+                "--proxied records must use --ttl=1"
+                " (CloudFlare ignores manual TTL on proxied records)"
+            ),
             remediation="either remove --ttl or remove --proxied",
         )
 
@@ -66,7 +69,10 @@ def cmd_dns_create(args: argparse.Namespace) -> int:
     if args.type not in _SUPPORTED_TYPES:
         raise CfafiError(
             code=EXIT_USER_ERROR,
-            message=f"unsupported record type: {args.type} (allowed: {' '.join(sorted(_SUPPORTED_TYPES))})",
+            message=(
+                f"unsupported record type: {args.type}"
+                f" (allowed: {' '.join(sorted(_SUPPORTED_TYPES))})"
+            ),
             remediation="pick one of the supported record types or extend _SUPPORTED_TYPES",
         )
     _validate_ttl(args.ttl, proxied=args.proxied)
@@ -128,13 +134,19 @@ def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("dns", help="DNS record management.")
     verbs = p.add_subparsers(dest="verb", required=True)
 
-    c = verbs.add_parser("create", help="Create a DNS record (dry-run by default; --apply commits).")
+    c = verbs.add_parser(
+        "create",
+        help="Create a DNS record (dry-run by default; --apply commits).",
+    )
     c.add_argument("zone", help="Zone name, e.g. culture.dev")
     c.add_argument("type", help="Record type (A, AAAA, CNAME, TXT, MX, NS, SRV, CAA)")
     c.add_argument("name", help="Record name, e.g. www or www.culture.dev")
     c.add_argument("content", help="Record content (IP, target, TXT value, etc.)")
     c.add_argument("--proxied", action="store_true", help="Orange-cloud the record")
-    c.add_argument("--ttl", type=int, default=1, help="TTL seconds (1 = automatic; 60–86400 for manual)")
+    c.add_argument(
+        "--ttl", type=int, default=1,
+        help="TTL seconds (1 = automatic; 60–86400 for manual)",
+    )
     c.add_argument(
         "--comment",
         default="Managed by cfafi in agentculture/cfafi",

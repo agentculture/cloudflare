@@ -50,7 +50,7 @@ def http_request(
 
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req) as resp:  # noqa: S310  # nosec B310 - bounded to CF_API_BASE
+        with urllib.request.urlopen(req) as resp:  # noqa: S310,E501  # nosec B310 - bounded to CF_API_BASE
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         _raise_http_error(exc)
