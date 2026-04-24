@@ -1,5 +1,5 @@
 ---
-name: cloudflare-write
+name: cfafi-write
 description: >
   Write / edit / delete operations against CloudFlare state for the
   AgentCulture organization — create redirects, modify rules, delete
@@ -8,24 +8,37 @@ description: >
   deleting a Pages project / Worker / DNS record, or the user says
   "create redirect", "add cloudflare redirect", "edit cloudflare",
   "write cloudflare", "modify dns", "delete pages project",
-  "cf-redirect-create", "cf-redirect". For **read-only** inventory
-  (list zones / DNS / Workers / Pages, verify token), use the
-  separate `cloudflare` skill — this skill never runs GET-only
-  queries.
+  "cf-redirect-create", "cf-redirect", "cfafi dns create". For
+  **read-only** inventory (list zones / DNS / Workers / Pages, verify
+  token), use the separate `cfafi` skill — this skill never runs
+  GET-only queries.
 ---
 
-# cloudflare-write
+# cfafi-write
 
-Write-side companion to the read-only `cloudflare` skill. Every script
+Write-side companion to the read-only `cfafi` skill. Every script
 here mutates CloudFlare state (creates, updates, or deletes a
 resource) and defaults to **dry-run** — the live API call only fires
 with an explicit `--apply` flag.
 
 Shared library: `_lib.sh` is a symlink to the read skill's copy at
-`../../cloudflare/scripts/_lib.sh`, so env loading, `cf_api`,
+`../../cfafi/scripts/_lib.sh`, so env loading, `cf_api`,
 `cf_api_paginated`, `cf_output`, `cf_output_kv`, and
 `cf_require_account_id` are all available without duplicating code.
 Fixes to the shared helpers apply to both skills automatically.
+
+## How to invoke
+
+Python CLI is the preferred entry (v0.1.0: `dns create`). Bash scripts
+under `scripts/` remain the fallback for write verbs not yet ported.
+The Python CLI reads `CLOUDFLARE_API_TOKEN` +
+`CLOUDFLARE_ACCOUNT_ID` from the environment only — no filesystem
+snooping. Bash scripts still load `.env` from the repo root during
+coexistence.
+
+**All mutations are dry-run by default** in both surfaces. Pass
+`--apply` to actually POST. This is the one safety rail that
+coexistence MUST preserve across both Python and bash.
 
 ## 1. Pre-flight
 
@@ -42,7 +55,7 @@ token**) with these *additional* scopes on top of the read scopes:
   identifier, but the dashboard's token-scope label is "Single
   Redirect".)
 - **Zone · DNS · Edit** (All zones from AgentCulture) —
-  required by `cf-dns-create.sh`
+  required by `cfafi dns create` and `cf-dns-create.sh`
 - **Account · Cloudflare Pages · Edit** (this account) —
   required by `cf-pages-project-create.sh`,
   `cf-pages-deployment-delete.sh`, and
@@ -67,15 +80,17 @@ then swap back. One token at a time.
 Verify the write-capable token is active:
 
 ```sh
-bash .claude/skills/cloudflare/scripts/cf-whoami.sh
+cfafi whoami
 ```
+
+*(Bash fallback: `bash .claude/skills/cfafi/scripts/cf-whoami.sh`)*
 
 (Reuses the read skill — the `/user/tokens/verify` endpoint works on
 any token.)
 
 ## 2. Safety model
 
-Every write script in this skill follows the same shape:
+Every write operation in this skill follows the same shape:
 
 - **Dry-run by default.** Running without `--apply` resolves names,
   performs read-only pre-flight checks (does the zone exist? does the
@@ -91,17 +106,17 @@ Every write script in this skill follows the same shape:
 
 ## 3. Scripts
 
-| Question → action | Script |
+| Action | Command |
 |---|---|
-| Create a Single Redirect for a zone | `bash .claude/skills/cloudflare-write/scripts/cf-redirect-create.sh FROM_HOST TO_HOST [--www] [--status=301] [--apply] [--json]` |
-| Create a DNS record in a zone | `bash .claude/skills/cloudflare-write/scripts/cf-dns-create.sh ZONE TYPE NAME CONTENT [--proxied] [--ttl=N] [--comment=STR] [--apply] [--json]` |
-| Create a Pages project connected to a GitHub repo | `bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh NAME GITHUB_OWNER REPO_NAME [--clone-from=PROJECT] [...] [--apply] [--json]` |
-| Create a Direct Upload Pages project (no git source) | `bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh NAME --direct-upload [--compatibility-date=DATE] [--apply] [--json]` |
-| Upload a Worker script | `bash .claude/skills/cloudflare-write/scripts/cf-worker-create.sh NAME --from-file=PATH [--module\|--service-worker] [--compatibility-date=DATE] [--apply] [--json]` |
-| Create a Workers route on a zone | `bash .claude/skills/cloudflare-write/scripts/cf-workers-route-create.sh ZONE PATTERN SCRIPT [--apply] [--json]` |
-| Stand up a new `culture.dev/NAME` sub-site (agex-style) | 3 scripts above + `templates/subpath-proxy.js`; see `references/subpath-site-pattern.md` |
-| Delete one Pages deployment | `bash .claude/skills/cloudflare-write/scripts/cf-pages-deployment-delete.sh PROJECT SHORT_ID_OR_ID [--force-canonical] [--apply] [--json]` |
-| Bulk-delete all deployments in a Pages project | `bash .claude/skills/cloudflare-write/scripts/cf-pages-deployments-purge.sh PROJECT [...]` (two-phase, see §3.3) |
+| Create a DNS record | `cfafi dns create <zone> <type> <name> <content>` *(dry-run; `--apply` to commit)* |
+| Create a Pages project | `bash .claude/skills/cfafi-write/scripts/cf-pages-project-create.sh ...` *(Python port pending)* |
+| Deploy a Worker | `bash .claude/skills/cfafi-write/scripts/cf-worker-create.sh ...` |
+| Route a Worker | `bash .claude/skills/cfafi-write/scripts/cf-workers-route-create.sh ...` |
+| Add a redirect | `bash .claude/skills/cfafi-write/scripts/cf-redirect-create.sh ...` |
+| Delete one Pages deployment | `bash .claude/skills/cfafi-write/scripts/cf-pages-deployment-delete.sh ...` |
+| Bulk-delete all deployments in a Pages project | `bash .claude/skills/cfafi-write/scripts/cf-pages-deployments-purge.sh ...` (two-phase, see §3.3) |
+
+Full flag reference for each script follows below.
 
 ### cf-redirect-create.sh
 
@@ -113,11 +128,11 @@ works for any sub-path.
 
 ```sh
 # Dry-run (prints what would happen, does not touch the API mutating path):
-bash .claude/skills/cloudflare-write/scripts/cf-redirect-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-redirect-create.sh \
   agentculture.org culture.dev --www
 
 # Apply for real:
-bash .claude/skills/cloudflare-write/scripts/cf-redirect-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-redirect-create.sh \
   agentculture.org culture.dev --www --apply
 ```
 
@@ -144,26 +159,32 @@ CNAME, orange-cloud in the dashboard). Check with the read skill
 before applying:
 
 ```sh
-bash .claude/skills/cloudflare/scripts/cf-dns.sh agentculture.org
+bash .claude/skills/cfafi/scripts/cf-dns.sh agentculture.org
 ```
 
 If every record is "—" (DNS-only) or the zone has no apex record,
-the redirect won't fire. Use `cf-dns-create.sh` (below) to add the
-apex and `www` records first, then create the redirect.
+the redirect won't fire. Use `cfafi dns create` / `cf-dns-create.sh`
+(below) to add the apex and `www` records first, then create the
+redirect.
 
-### cf-dns-create.sh
+### cf-dns-create.sh / cfafi dns create
 
 Creates a DNS record in a zone. Same safety model as
 `cf-redirect-create.sh`: dry-run by default, `--apply` to commit,
 idempotency enforced before the POST.
 
 ```sh
+# Python CLI (primary):
+cfafi dns create agentculture.org A agentculture.org 192.0.2.1 --proxied
+cfafi dns create agentculture.org A agentculture.org 192.0.2.1 --proxied --apply
+
+# Bash fallback:
 # Canonical setup for a redirect-only zone — apex + www, both proxied.
 # 192.0.2.1 is TEST-NET-1; CF intercepts at the edge before forwarding,
 # so the origin IP is irrelevant for a pure-redirect zone.
-bash .claude/skills/cloudflare-write/scripts/cf-dns-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-dns-create.sh \
   agentculture.org A agentculture.org 192.0.2.1 --proxied --apply
-bash .claude/skills/cloudflare-write/scripts/cf-dns-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-dns-create.sh \
   agentculture.org A www.agentculture.org 192.0.2.1 --proxied --apply
 ```
 
@@ -209,15 +230,15 @@ bundle. See `references/subpath-site-pattern.md`.
 ```sh
 # Dry-run — shows the full POST body we would send, including the
 # build_config / deployment_configs lifted from culture-dev:
-bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-pages-project-create.sh \
   culture agentculture culture --clone-from=culture-dev
 
 # Apply for real:
-bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-pages-project-create.sh \
   culture agentculture culture --clone-from=culture-dev --apply
 
 # Direct Upload variant (agex / citation-cli / afi style — no source):
-bash .claude/skills/cloudflare-write/scripts/cf-pages-project-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-pages-project-create.sh \
   afi --direct-upload --compatibility-date=2026-04-20 --apply
 ```
 
@@ -279,11 +300,11 @@ multipart `PUT /accounts/:id/workers/scripts/:name` endpoint.
 
 ```sh
 # Dry-run (no mutation; prints metadata + a 20-line source preview):
-bash .claude/skills/cloudflare-write/scripts/cf-worker-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-worker-create.sh \
   afi-proxy --from-file=/tmp/afi-proxy.js --compatibility-date=2026-04-20
 
 # Apply:
-bash .claude/skills/cloudflare-write/scripts/cf-worker-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-worker-create.sh \
   afi-proxy --from-file=/tmp/afi-proxy.js --compatibility-date=2026-04-20 --apply
 ```
 
@@ -332,11 +353,11 @@ pattern. The route sits at
 
 ```sh
 # Dry-run:
-bash .claude/skills/cloudflare-write/scripts/cf-workers-route-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-workers-route-create.sh \
   culture.dev 'culture.dev/afi*' afi-proxy
 
 # Apply:
-bash .claude/skills/cloudflare-write/scripts/cf-workers-route-create.sh \
+bash .claude/skills/cfafi-write/scripts/cf-workers-route-create.sh \
   culture.dev 'culture.dev/afi*' afi-proxy --apply
 ```
 
@@ -369,14 +390,14 @@ full UUID. Dry-run by default; `--apply` to commit.
 
 ```sh
 # Inventory first (read skill) to pick a short_id:
-bash .claude/skills/cloudflare/scripts/cf-pages.sh agentirc-dev
+bash .claude/skills/cfafi/scripts/cf-pages.sh agentirc-dev
 
 # Dry-run:
-bash .claude/skills/cloudflare-write/scripts/cf-pages-deployment-delete.sh \
+bash .claude/skills/cfafi-write/scripts/cf-pages-deployment-delete.sh \
   agentirc-dev 66aaccee
 
 # Apply for real:
-bash .claude/skills/cloudflare-write/scripts/cf-pages-deployment-delete.sh \
+bash .claude/skills/cfafi-write/scripts/cf-pages-deployment-delete.sh \
   agentirc-dev 66aaccee --apply
 ```
 
@@ -406,7 +427,7 @@ skill uses:
    root.
 
    ```sh
-   bash .claude/skills/cloudflare-write/scripts/cf-pages-deployments-purge.sh agentirc-dev
+   bash .claude/skills/cfafi-write/scripts/cf-pages-deployments-purge.sh agentirc-dev
    ```
 
 2. **Tick + sign** — open the manifest, read each row, and change
@@ -437,7 +458,7 @@ skill uses:
    - skips any ticked ids that are already gone (idempotent re-runs).
 
    ```sh
-   bash .claude/skills/cloudflare-write/scripts/cf-pages-deployments-purge.sh \
+   bash .claude/skills/cfafi-write/scripts/cf-pages-deployments-purge.sh \
      agentirc-dev --manifest ./.cf-purge-manifests/20260422T140700Z-agentirc-dev.md --apply
    ```
 
