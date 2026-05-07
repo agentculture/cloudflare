@@ -7,7 +7,7 @@ import argparse
 from cfafi._env import require_env
 from cfafi._remote_login import setup, show, teardown
 from cfafi._remote_login._common import Context, derive_names, resolve_zone
-from cfafi._remote_login._preflight import check_token_scopes
+from cfafi._remote_login._preflight import check_token_alive
 from cfafi._remote_login._render import (
     render_setup_dryrun_markdown, render_setup_json, render_setup_markdown,
     render_show_json, render_show_markdown,
@@ -50,7 +50,7 @@ def cmd_setup(args: argparse.Namespace) -> None:
             remediation="pass --allow user@example.com or --allow-domain @example.com",
         )
     json_mode = bool(args.json)
-    check_token_scopes(operation="setup", with_service_token=args.with_service_token)
+    check_token_alive()
     ctx = _ctx_with_overrides(args)
 
     if not args.apply:
@@ -101,7 +101,7 @@ def cmd_setup(args: argparse.Namespace) -> None:
 
 def cmd_show(args: argparse.Namespace) -> None:
     json_mode = bool(args.json)
-    check_token_scopes(operation="show", with_service_token=False)
+    check_token_alive()
     ctx = _ctx_with_overrides(args)
     result = show(ctx=ctx)
     if json_mode:
@@ -115,7 +115,7 @@ def cmd_show(args: argparse.Namespace) -> None:
 
 def cmd_teardown(args: argparse.Namespace) -> None:
     json_mode = bool(args.json)
-    check_token_scopes(operation="teardown", with_service_token=False)
+    check_token_alive()
     ctx = _ctx_with_overrides(args)
 
     if not args.apply:

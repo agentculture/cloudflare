@@ -13,27 +13,21 @@ def _zones_one(name="culture.dev", zid="zid-1"):
     }
 
 
-def _verify_full_scopes(with_st=False):
-    pgs = [
-        "Cloudflare Tunnel Write",
-        "Access: Apps and Policies Write",
-        "Access: Organizations Write",
-        "DNS Write",
-    ]
-    if with_st:
-        pgs.append("Access: Service Tokens Write")
+def _verify_alive(status="active"):
+    """Mirror real `/user/tokens/verify`: id/status/not_before/expires_on only."""
     return {
         "success": True, "errors": [], "messages": [],
         "result": {
-            "id": "tok-1", "status": "active",
-            "policies": [{"permission_groups": [{"name": p} for p in pgs],
-                          "resources": {}}],
+            "id": "tok-1",
+            "status": status,
+            "not_before": "2026-01-01T00:00:00Z",
+            "expires_on": "2027-01-01T00:00:00Z",
         },
     }
 
 
 def test_setup_dry_run_prints_plan_and_does_not_post(http_stub, capsys):
-    http_stub.set("GET", "/user/tokens/verify", _verify_full_scopes())
+    http_stub.set("GET", "/user/tokens/verify", _verify_alive())
     http_stub.set("GET", "/zones", _zones_one())
     rc = main([
         "remote-login", "setup",
@@ -50,7 +44,7 @@ def test_setup_dry_run_prints_plan_and_does_not_post(http_stub, capsys):
 
 
 def test_setup_requires_at_least_one_allow(http_stub, capsys):
-    http_stub.set("GET", "/user/tokens/verify", _verify_full_scopes())
+    http_stub.set("GET", "/user/tokens/verify", _verify_alive())
     http_stub.set("GET", "/zones", _zones_one())
     rc = main([
         "remote-login", "setup",
@@ -59,13 +53,8 @@ def test_setup_requires_at_least_one_allow(http_stub, capsys):
     assert rc != 0
 
 
-def test_setup_preflight_blocks_when_token_lacks_scope(http_stub, capsys):
-    http_stub.set("GET", "/user/tokens/verify", {
-        "success": True, "errors": [], "messages": [],
-        "result": {"id": "tok-1", "status": "active",
-                   "policies": [{"permission_groups": [{"name": "DNS Read"}],
-                                 "resources": {}}]},
-    })
+def test_setup_preflight_blocks_when_token_inactive(http_stub, capsys):
+    http_stub.set("GET", "/user/tokens/verify", _verify_alive(status="disabled"))
     rc = main([
         "remote-login", "setup",
         "--hostname", "irc.culture.dev",
@@ -73,19 +62,11 @@ def test_setup_preflight_blocks_when_token_lacks_scope(http_stub, capsys):
     ])
     err = capsys.readouterr().err
     assert rc != 0
-    assert "missing required scopes" in err
+    assert "'disabled'" in err
 
 
 def test_show_emits_json_when_flagged(http_stub, capsys):
-    http_stub.set("GET", "/user/tokens/verify", {
-        "success": True, "errors": [], "messages": [],
-        "result": {"id": "tok-1", "status": "active",
-                   "policies": [{"permission_groups": [
-                       {"name": "Cloudflare Tunnel Read"},
-                       {"name": "Access: Apps and Policies Read"},
-                       {"name": "DNS Read"},
-                   ], "resources": {}}]},
-    })
+    http_stub.set("GET", "/user/tokens/verify", _verify_alive())
     http_stub.set("GET", "/zones", _zones_one())
     http_stub.set("GET", "/accounts/test-account/access/organizations", {
         "success": True, "errors": [], "messages": [],
@@ -116,7 +97,7 @@ def test_show_emits_json_when_flagged(http_stub, capsys):
 
 
 def test_teardown_dry_run_does_not_delete(http_stub, capsys):
-    http_stub.set("GET", "/user/tokens/verify", _verify_full_scopes())
+    http_stub.set("GET", "/user/tokens/verify", _verify_alive())
     http_stub.set("GET", "/zones", _zones_one())
     rc = main([
         "remote-login", "teardown",

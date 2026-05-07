@@ -120,9 +120,11 @@ def render_show_markdown(result: ShowResult, *, hostname: str) -> str:
     else:
         lines.append("- **tunnel:** (not found)")
     if result.dns is not None:
+        proxied = bool(result.dns.get("proxied"))
+        marker = "✓" if proxied else "⚠ (unproxied — Access bypassed)"
         lines.append(
             f"- **dns:** CNAME {hostname} → {result.dns.get('content')} "
-            f"({'proxied' if result.dns.get('proxied') else 'unproxied'}) ✓"
+            f"({'proxied' if proxied else 'unproxied'}) {marker}"
         )
     else:
         lines.append("- **dns:** (not found)")

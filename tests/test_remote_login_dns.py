@@ -44,6 +44,20 @@ def test_ensure_cname_returns_existing_when_target_matches(http_stub):
     assert [c for c in http_stub.calls if c[0] == "POST"] == []
 
 
+def test_ensure_cname_raises_when_existing_points_at_tunnel_but_unproxied(http_stub):
+    http_stub.queue(_list_envelope({
+        "id": "rec-1", "type": "CNAME", "name": "irc.culture.dev",
+        "content": "tun-b.cfargotunnel.com", "proxied": False,
+    }))
+    with pytest.raises(CfafiError) as exc:
+        ensure_cname(
+            zone_id="zid-1", hostname="irc.culture.dev", tunnel_id="tun-b",
+        )
+    assert exc.value.code == EXIT_USER_ERROR
+    assert "unproxied" in exc.value.message
+    assert "Access" in exc.value.message
+
+
 def test_ensure_cname_raises_when_existing_points_elsewhere(http_stub):
     http_stub.queue(_list_envelope({
         "id": "rec-1", "type": "CNAME", "name": "irc.culture.dev",

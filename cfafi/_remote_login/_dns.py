@@ -40,6 +40,22 @@ def ensure_cname(
                     f"--apply` first, or change the record in the dashboard"
                 ),
             )
+        # Access requires proxied=True. An unproxied CNAME pointing at
+        # the right tunnel is a silent misconfiguration — traffic would
+        # bypass Access. Refuse rather than declare success.
+        if not existing.get("proxied"):
+            raise CfafiError(
+                code=EXIT_USER_ERROR,
+                message=(
+                    f"DNS CNAME at {hostname} points to the right tunnel "
+                    f"but is unproxied; Access requires proxied (orange cloud)"
+                ),
+                remediation=(
+                    f"flip the record to proxied in the dashboard, or run "
+                    f"`cfafi remote-login teardown --hostname {hostname} "
+                    f"--apply` and re-run setup"
+                ),
+            )
         return existing["id"], False
 
     body = {

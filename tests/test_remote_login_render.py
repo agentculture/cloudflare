@@ -157,6 +157,25 @@ def test_render_show_markdown_marks_team_domain_not_found_when_none():
     assert "**zero-trust-org:** (not found)" in md
 
 
+def test_render_show_markdown_warns_on_unproxied_cname():
+    show = ShowResult(
+        team_domain="ac.cloudflareaccess.com",
+        tunnel={"id": "tun-1", "name": "irc-culture-dev"},
+        dns={
+            "id": "rec-1", "type": "CNAME", "name": "irc.culture.dev",
+            "content": "tun-1.cfargotunnel.com", "proxied": False,
+        },
+        access_app=None, policy=None, service_token=None,
+    )
+    md = render_show_markdown(show, hostname="irc.culture.dev")
+    assert "unproxied" in md
+    assert "⚠" in md
+    assert "Access bypassed" in md
+    # The healthy ✓ marker MUST NOT appear on this line.
+    dns_line = next(line for line in md.splitlines() if "**dns:**" in line)
+    assert "✓" not in dns_line
+
+
 def test_render_setup_markdown_renders_domains_only_policy():
     result = SetupResult(
         team_domain="ac.cloudflareaccess.com",

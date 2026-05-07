@@ -280,26 +280,35 @@ GitHub side: `Settings → Environments → New environment` for both
 
 ## 9. Operator token scopes (for `cfafi remote-login`)
 
-The read-only token described above is enough for `cfafi zones list`,
-`cfafi dns list`, `cfafi whoami`, and `cfafi remote-login show`. To run
-`cfafi remote-login setup` or `cfafi remote-login teardown`, mint a
-**second** token with broader scopes — keep the read-only token for
-day-to-day inventory.
+The read-only token described above is **not** sufficient for any
+`cfafi remote-login` verb — even `show` calls `/access/organizations`,
+`/cfd_tunnel`, `/access/apps`, and `/access/service_tokens`, which
+the read-only scope set doesn't cover. Mint a **second** token for
+`remote-login` and keep the read-only one for inventory (`zones list`,
+`dns list`, `whoami`).
 
 Mint at <https://dash.cloudflare.com/profile/api-tokens> → **Create
-Token** → **Custom token**. Required permission groups:
+Token** → **Custom token**. Permission groups:
 
-| Permission                            | Resource | Note                                                                                                |
-|---------------------------------------|----------|-----------------------------------------------------------------------------------------------------|
-| Account → Cloudflare Tunnel           | Edit     | Tunnel create/delete/get-token                                                                      |
-| Account → Access: Apps and Policies   | Edit     | Access app + allow-policy                                                                           |
-| Account → Access: Service Tokens      | Edit     | Only when using `--with-service-token`                                                              |
-| Account → Access: Organizations       | Edit     | Validates Zero Trust org; can be downgraded to Read once ZT is enabled                              |
-| Zone → DNS                            | Edit     | On the zone(s) hosting your hostnames                                                               |
+| Permission                            | Resource | When | Note |
+|---------------------------------------|----------|------|------|
+| Zone → Zone                           | Read     | always | `remote-login` resolves `--hostname` → zone id by listing `/zones` |
+| Zone → DNS                            | Edit     | setup, teardown | On the zone(s) hosting your hostnames |
+| Zone → DNS                            | Read     | show only | If you have a separate, narrower `show`-only token |
+| Account → Cloudflare Tunnel           | Edit     | setup, teardown | Tunnel create / delete / get-token |
+| Account → Cloudflare Tunnel           | Read     | show only | Same — Read suffices for inspection |
+| Account → Access: Apps and Policies   | Edit     | setup, teardown | Access app + allow-policy mutations |
+| Account → Access: Apps and Policies   | Read     | show only | Same |
+| Account → Access: Organizations       | Read     | always | `remote-login` always reads the Access org for the team domain |
+| Account → Access: Service Tokens      | Edit     | setup with `--with-service-token`, teardown | Mints / deletes the service token |
+| Account → Access: Service Tokens      | Read     | show only | Reads the service token's metadata |
 
-`cfafi remote-login` runs a pre-flight `GET /user/tokens/verify` and
-errors out with the missing scopes' exact names if your token is too
-narrow — you'll see a clean message rather than a 403 mid-orchestration.
+**Scope correctness is not preflight-validated.** `/user/tokens/verify`
+returns only `id` / `status` / `not_before` / `expires_on` — it does
+not expose the token's permission groups. `cfafi remote-login`
+preflights only that the token is alive (`status == "active"`); if a
+required scope is missing, you'll see a `403` from the first endpoint
+that needs it, with remediation pointing back to this section.
 
 **Token minting is operator-driven.** cfafi never calls
 `POST /user/tokens` itself; an issue or PR proposing it will be

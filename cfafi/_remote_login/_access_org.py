@@ -36,8 +36,9 @@ def ensure_org(
                     f"{auth_domain!r}"
                 ),
                 remediation=(
-                    "either pass --auth-domain matching the existing org, "
-                    "or reset Zero Trust from the dashboard"
+                    "align the requested auth_domain with the existing "
+                    "org, or reset Zero Trust from the dashboard "
+                    "(https://one.dash.cloudflare.com/?to=/:account/access)"
                 ),
             )
         return existing.get("auth_domain") or auth_domain, False
