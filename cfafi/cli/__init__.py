@@ -43,6 +43,24 @@ def _argv_has_json(argv: list[str] | None) -> bool:
     return any(t == "--json" or t.startswith("--json=") for t in tokens)
 
 
+def _resolve_prog() -> str:
+    """Return the basename of the invoking executable.
+
+    Lets `cultureflare --version` print `cultureflare 0.2.2` while
+    `cfafi --version` prints `cfafi 0.2.2` — both console scripts
+    point at this module, but argparse's prog (used in help text,
+    errors, and version output) follows whichever alias was invoked.
+    Falls back to "cultureflare" (the canonical name) if argv is
+    empty, e.g. under a programmatic call to ``main()``.
+    """
+    import os
+    if sys.argv and sys.argv[0]:
+        prog = os.path.basename(sys.argv[0])
+        if prog:
+            return prog
+    return "cultureflare"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     # Deferred imports keep cli import-side effects tight.
     from cfafi.cli._commands import dns as _dns
@@ -53,8 +71,8 @@ def _build_parser() -> argparse.ArgumentParser:
     from cfafi.cli._commands import zones as _zones
 
     parser = _CfafiArgumentParser(
-        prog="cfafi",
-        description="cfafi — CloudFlare Agent First Interface",
+        prog=_resolve_prog(),
+        description="CloudFlare Agent First Interface (cfafi / cultureflare)",
     )
     parser.add_argument(
         "--version",

@@ -1,6 +1,6 @@
 [project]
 name = "cfafi"
-version = "0.2.1"
+version = "0.2.2"
 description = "CloudFlare Agent First Interface — agent-first CLI for CloudFlare management in the AgentCulture org."
 readme = "README.md"
 license = "MIT"
@@ -21,6 +21,7 @@ Issues = "https://github.com/agentculture/cfafi/issues"
 
 [project.scripts]
 cfafi = "cfafi.cli:main"
+cultureflare = "cfafi.cli:main"
 
 [build-system]
 requires = ["hatchling"]

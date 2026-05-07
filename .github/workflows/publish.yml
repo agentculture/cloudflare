@@ -65,6 +65,51 @@ jobs:
         run: |
           echo "::notice::Test with: uv tool install --index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match cfafi==${DEV_VERSION}"
 
+  # Phase 2 of the dual-publish: build the SAME source under the
+  # `cultureflare` distribution name and push it to TestPyPI. The
+  # `pypi-cultureflare` / `testpypi-cultureflare` GitHub environments
+  # must exist and be wired to the cultureflare Trusted Publisher
+  # pending publishers (see docs/SETUP.md § 9). The publish step uses
+  # `continue-on-error` so an unwired environment doesn't block the PR;
+  # remove that guard once the publisher pair is verified.
+  test-publish-cultureflare:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: test
+    runs-on: ubuntu-latest
+    environment: testpypi-cultureflare
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+
+      - run: uv python install 3.12
+
+      - run: uv sync
+
+      - name: Set dev version + swap distribution name
+        run: |
+          BASE=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          DEV_VERSION="${BASE}.dev${{ github.run_number }}"
+          sed -i "s/^version = .*/version = \"${DEV_VERSION}\"/" pyproject.toml
+          sed -i 's/^name = "cfafi"$/name = "cultureflare"/' pyproject.toml
+          echo "DEV_VERSION=${DEV_VERSION}" >> "$GITHUB_ENV"
+          echo "Publishing cultureflare ${DEV_VERSION} to TestPyPI"
+
+      - name: Build and publish cultureflare to TestPyPI
+        continue-on-error: true
+        run: |
+          rm -rf dist/
+          uv build
+          uv publish --publish-url https://test.pypi.org/legacy/ --trusted-publishing always --check-url https://test.pypi.org/simple/
+
+      - name: Print install commands
+        if: always()
+        run: |
+          echo "::notice::Test with: uv tool install --index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match cultureflare==${DEV_VERSION}"
+
   publish:
     if: github.event_name == 'push'
     needs: test
@@ -84,5 +129,33 @@ jobs:
 
       - name: Build and publish to PyPI
         run: |
+          uv build
+          uv publish --trusted-publishing always --check-url https://pypi.org/simple/
+
+  publish-cultureflare:
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: pypi-cultureflare
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+
+      - run: uv python install 3.12
+
+      - run: uv sync
+
+      - name: Swap distribution name to cultureflare
+        run: |
+          sed -i 's/^name = "cfafi"$/name = "cultureflare"/' pyproject.toml
+
+      - name: Build and publish cultureflare to PyPI
+        continue-on-error: true
+        run: |
+          rm -rf dist/
           uv build
           uv publish --trusted-publishing always --check-url https://pypi.org/simple/
