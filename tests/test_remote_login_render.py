@@ -138,3 +138,40 @@ def test_render_teardown_json_envelope_shape():
     assert env["success"] is True
     assert env["result"]["steps"][0]["name"] == "dns"
     assert env["result"]["steps"][0]["action"] == "deleted"
+
+
+def test_render_teardown_markdown_empty_steps_says_nothing_to_delete():
+    md = render_teardown_markdown(
+        TeardownResult(steps=[]), hostname="irc.culture.dev",
+    )
+    assert "Nothing to delete." in md
+    assert "1." not in md
+
+
+def test_render_show_markdown_marks_team_domain_not_found_when_none():
+    show = ShowResult(
+        team_domain=None, tunnel=None, dns=None,
+        access_app=None, policy=None, service_token=None,
+    )
+    md = render_show_markdown(show, hostname="irc.culture.dev")
+    assert "**zero-trust-org:** (not found)" in md
+
+
+def test_render_setup_markdown_renders_domains_only_policy():
+    result = SetupResult(
+        team_domain="ac.cloudflareaccess.com",
+        tunnel_id="tun-1", tunnel_name="irc-culture-dev",
+        tunnel_token="TUN-TOK",
+        dns_record_id="rec-1",
+        dns_target="tun-1.cfargotunnel.com",
+        access_app_id="app-1",
+        policy_id="pol-1",
+        policy_emails=[],
+        policy_domains=["@example.com"],
+        service_token_client_id=None,
+        service_token_client_secret=None,
+        steps=[],
+    )
+    md = render_setup_markdown(result, hostname="irc.culture.dev")
+    assert "**POLICY:** allow-domain [@example.com]" in md
+    assert "allow [" not in md
