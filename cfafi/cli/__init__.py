@@ -48,6 +48,7 @@ def _build_parser() -> argparse.ArgumentParser:
     from cfafi.cli._commands import dns as _dns
     from cfafi.cli._commands import explain as _explain
     from cfafi.cli._commands import learn as _learn
+    from cfafi.cli._commands import remote_login as _remote_login
     from cfafi.cli._commands import whoami as _whoami
     from cfafi.cli._commands import zones as _zones
 
@@ -69,6 +70,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # Noun groups
     _zones.register(sub)
     _dns.register(sub)
+    _remote_login.register(sub)
 
     return parser
 
