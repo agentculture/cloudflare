@@ -160,6 +160,66 @@ def _whoami() -> str:
         return "-"
 
 
+def _action(created: bool) -> str:
+    """Map ``created`` to the canonical step-record action verb."""
+    return "ensured" if created else "skipped"
+
+
+def _ensure_service_token_step(
+    *,
+    ctx: Context,
+    app_id: str,
+    with_service_token: bool,
+    steps: list[StepRecord],
+) -> tuple[str | None, str | None, str | None]:
+    """Run the optional service-token + non_identity-policy pair.
+
+    Returns ``(client_id, client_secret, policy_id)`` for the
+    ``SetupResult``. Each tuple element is None when the corresponding
+    resource wasn't requested or is not retrievable. Mutates ``steps``
+    in place so the orchestrator's step record list keeps its order.
+
+    Strict=False on the token ensure: re-running setup against a
+    deployment whose token already exists must be safe. The secret is
+    one-shot; re-runs return ``client_id`` with ``secret=None`` and a
+    "skipped (existing; secret not rotated)" step. Operators wanting a
+    fresh secret teardown first.
+    """
+    if not with_service_token:
+        return None, None, None
+
+    svc_cid, svc_secret, svc_created, svc_token_id = ensure_service_token(
+        account_id=ctx.account_id,
+        name=ctx.names.service_token_name,
+        strict=False,
+    )
+    svc_detail = f"client_id={svc_cid}"
+    if not svc_created:
+        svc_detail += " (existing; secret not rotated)"
+    steps.append(StepRecord(
+        name="service-token", action=_action(svc_created), detail=svc_detail,
+    ))
+
+    if not svc_token_id:
+        return svc_cid, svc_secret, None
+
+    # Non-identity policy admitting the token. Without it, requests
+    # carrying CF-Access-Client-Id/Secret are 302-redirected to SSO
+    # regardless of the existing email allow-policy.
+    svc_policy_id, svc_policy_created = ensure_service_token_policy(
+        account_id=ctx.account_id,
+        app_id=app_id,
+        token_id=svc_token_id,
+        name=ctx.names.service_token_policy_name,
+    )
+    steps.append(StepRecord(
+        name="service-token-policy",
+        action=_action(svc_policy_created),
+        detail=f"id={svc_policy_id}",
+    ))
+    return svc_cid, svc_secret, svc_policy_id
+
+
 def setup(
     *,
     ctx: Context,
@@ -212,8 +272,7 @@ def setup(
         account_id=ctx.account_id, name=ctx.names.tunnel_name,
     )
     steps.append(StepRecord(
-        name="tunnel",
-        action="ensured" if tunnel_created else "skipped",
+        name="tunnel", action=_action(tunnel_created),
         detail=f"{ctx.names.tunnel_name} (id={tunnel_id})",
     ))
     tunnel_token = get_tunnel_token(
@@ -231,8 +290,7 @@ def setup(
         service=ctx.service,
     )
     steps.append(StepRecord(
-        name="tunnel-config",
-        action="ensured" if tunnel_config_changed else "skipped",
+        name="tunnel-config", action=_action(tunnel_config_changed),
         detail=f"{ctx.hostname} → {ctx.service}",
     ))
 
@@ -242,8 +300,7 @@ def setup(
     )
     dns_target = f"{tunnel_id}.cfargotunnel.com"
     steps.append(StepRecord(
-        name="dns",
-        action="ensured" if dns_created else "skipped",
+        name="dns", action=_action(dns_created),
         detail=f"CNAME {ctx.hostname} → {dns_target}",
     ))
 
@@ -255,9 +312,7 @@ def setup(
         session_duration=session_duration,
     )
     steps.append(StepRecord(
-        name="access-app",
-        action="ensured" if app_created else "skipped",
-        detail=f"id={app_id}",
+        name="access-app", action=_action(app_created), detail=f"id={app_id}",
     ))
 
     # 5. Allow-policy.
@@ -267,50 +322,16 @@ def setup(
         emails=emails, domains=domains,
     )
     steps.append(StepRecord(
-        name="allow-policy",
-        action="ensured" if policy_created else "skipped",
+        name="allow-policy", action=_action(policy_created),
         detail=f"id={policy_id}",
     ))
 
-    # 6. Service token (optional).
-    # strict=False: re-running setup against a deployment whose token
-    # already exists must be safe. The secret is one-shot; re-runs return
-    # client_id with secret=None and the orchestrator records a "skipped"
-    # step. Operators wanting a fresh secret teardown first.
-    svc_cid: str | None = None
-    svc_secret: str | None = None
-    svc_token_id: str | None = None
-    svc_policy_id: str | None = None
-    if with_service_token:
-        svc_cid, svc_secret, svc_created, svc_token_id = ensure_service_token(
-            account_id=ctx.account_id,
-            name=ctx.names.service_token_name,
-            strict=False,
-        )
-        svc_detail = f"client_id={svc_cid}"
-        if not svc_created:
-            svc_detail += " (existing; secret not rotated)"
-        steps.append(StepRecord(
-            name="service-token",
-            action="ensured" if svc_created else "skipped",
-            detail=svc_detail,
-        ))
-
-    # 6b. Non-identity policy that admits the service token.
-    # Without it, requests carrying CF-Access-Client-Id/Secret are
-    # 302-redirected to SSO regardless of the existing email allow-policy.
-    if with_service_token and svc_token_id:
-        svc_policy_id, svc_policy_created = ensure_service_token_policy(
-            account_id=ctx.account_id,
-            app_id=app_id,
-            token_id=svc_token_id,
-            name=ctx.names.service_token_policy_name,
-        )
-        steps.append(StepRecord(
-            name="service-token-policy",
-            action="ensured" if svc_policy_created else "skipped",
-            detail=f"id={svc_policy_id}",
-        ))
+    # 6. Service token + non_identity policy (optional, paired).
+    svc_cid, svc_secret, svc_policy_id = _ensure_service_token_step(
+        ctx=ctx, app_id=app_id,
+        with_service_token=with_service_token,
+        steps=steps,
+    )
 
     sealed_in: dict[str, str] = {}
     if seal.enabled:
