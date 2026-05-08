@@ -239,3 +239,60 @@ def test_probe_filenotfound_raises(monkeypatch):
     with pytest.raises(CfafiError) as exc:
         probe(ShushuTarget(user=None, name="X"))
     assert exc.value.code == EXIT_USER_ERROR
+
+
+# ---------------------------------------------------------------------------
+# delete() tests
+# ---------------------------------------------------------------------------
+
+from cultureflare._secrets._shushu_sink import delete  # noqa: E402
+
+
+def test_delete_returns_true_on_success(monkeypatch):
+    class _Run:
+        def __call__(self, argv, **kwargs):
+            assert "delete" in argv
+            return subprocess.CompletedProcess(
+                args=argv, returncode=0, stdout=b"", stderr=b"",
+            )
+    monkeypatch.setattr(subprocess, "run", _Run())
+    assert delete(ShushuTarget(user=None, name="X")) is True
+
+
+def test_delete_returns_false_when_already_absent(monkeypatch):
+    class _Run:
+        def __call__(self, argv, **kwargs):
+            return subprocess.CompletedProcess(
+                args=argv, returncode=64, stdout=b"", stderr=b"no such record",
+            )
+    monkeypatch.setattr(subprocess, "run", _Run())
+    assert delete(ShushuTarget(user=None, name="X")) is False
+
+
+def test_delete_uses_sudo_for_cross_user(monkeypatch):
+    captured: list[list[str]] = []
+
+    class _Run:
+        def __call__(self, argv, **kwargs):
+            captured.append(argv)
+            return subprocess.CompletedProcess(
+                args=argv, returncode=0, stdout=b"", stderr=b"",
+            )
+
+    monkeypatch.setattr(subprocess, "run", _Run())
+    delete(ShushuTarget(user="alice", name="X"))
+    assert captured[0][:2] == ["sudo", "shushu"]
+    assert "--user" in captured[0]
+    assert captured[0][captured[0].index("--user") + 1] == "alice"
+
+
+def test_delete_other_error_raises(monkeypatch):
+    class _Run:
+        def __call__(self, argv, **kwargs):
+            return subprocess.CompletedProcess(
+                args=argv, returncode=70, stdout=b"", stderr=b"shushu bug",
+            )
+    monkeypatch.setattr(subprocess, "run", _Run())
+    with pytest.raises(CfafiError) as exc:
+        delete(ShushuTarget(user=None, name="X"))
+    assert exc.value.code == EXIT_API

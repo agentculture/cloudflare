@@ -28,20 +28,44 @@ from cultureflare.cli._errors import (
 )
 
 
+def _sudo_prefix(target: ShushuTarget) -> list[str]:
+    """argv prefix that lifts the call to sudo when target.user is set."""
+    return ["sudo"] if target.user is not None else []
+
+
+def _user_flag(target: ShushuTarget) -> list[str]:
+    """``--user NAME`` flag pair when cross-user, else empty."""
+    return ["--user", target.user] if target.user is not None else []
+
+
 def _argv_for_set(target: ShushuTarget, meta: SealMetadata) -> list[str]:
-    argv: list[str] = []
-    if target.user is not None:
-        argv.append("sudo")
-    argv.extend([
+    return [
+        *_sudo_prefix(target),
         "shushu", "set", "--hidden",
         "--source", meta.source,
         "--purpose", meta.purpose,
         "--rotate-howto", meta.rotate_howto,
-    ])
-    if target.user is not None:
-        argv.extend(["--user", target.user])
-    argv.extend([target.name, "-"])
-    return argv
+        *_user_flag(target),
+        target.name, "-",
+    ]
+
+
+def _argv_for_show(target: ShushuTarget) -> list[str]:
+    return [
+        *_sudo_prefix(target),
+        "shushu", "show", "--json",
+        *_user_flag(target),
+        target.name,
+    ]
+
+
+def _argv_for_delete(target: ShushuTarget) -> list[str]:
+    return [
+        *_sudo_prefix(target),
+        "shushu", "delete",
+        *_user_flag(target),
+        target.name,
+    ]
 
 
 def _map_exit_code(rc: int, stderr: bytes, target: ShushuTarget) -> CfafiError:
@@ -104,17 +128,6 @@ def seal(
         raise _map_exit_code(result.returncode, result.stderr, target)
 
 
-def _argv_for_show(target: ShushuTarget) -> list[str]:
-    argv: list[str] = []
-    if target.user is not None:
-        argv.append("sudo")
-    argv.extend(["shushu", "show", "--json"])
-    if target.user is not None:
-        argv.extend(["--user", target.user])
-    argv.append(target.name)
-    return argv
-
-
 def probe(target: ShushuTarget) -> dict | None:
     """Return shushu's metadata dict for ``target.name``, or None when absent.
 
@@ -141,3 +154,26 @@ def probe(target: ShushuTarget) -> dict | None:
     if not payload.get("ok"):
         return None
     return payload.get("result")
+
+
+def delete(target: ShushuTarget) -> bool:
+    """Remove ``target.name`` from shushu.
+
+    Returns True on success, False when the record was already absent
+    (shushu exit 64). Other non-zero exits raise CfafiError.
+    """
+    argv = _argv_for_delete(target)
+    try:
+        result = subprocess.run(argv, capture_output=True, check=False)
+    except FileNotFoundError as exc:
+        raise CfafiError(
+            code=EXIT_USER_ERROR,
+            message="shushu binary not found",
+            remediation="`uv tool install shushu`",
+        ) from exc
+
+    if result.returncode == 0:
+        return True
+    if result.returncode == 64:
+        return False
+    raise _map_exit_code(result.returncode, result.stderr, target)
