@@ -11,6 +11,7 @@ class Names:
     app_name: str
     service_token_name: str
     policy_name: str
+    service_token_policy_name: str
 
 
 def derive_names(
@@ -33,6 +34,7 @@ def derive_names(
         app_name=an,
         service_token_name=stn,
         policy_name=f"{an}-allow",
+        service_token_policy_name=f"{an}-svc-allow",
     )
 
 
@@ -44,6 +46,7 @@ class Context:
     zone_id: str
     hostname: str
     names: Names
+    service: str | None = None
 
 
 @dataclass
@@ -71,6 +74,10 @@ class SetupResult:
     service_token_client_secret: str | None
     steps: list[StepRecord]
     sealed_in: dict[str, str] = field(default_factory=dict)
+    # Added in #28: tunnel ingress route + non_identity service-token policy.
+    # Defaulted to None so older test fixtures keep compiling.
+    tunnel_service: str | None = None
+    service_token_policy_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -82,6 +89,9 @@ class ShowResult:
     policy: dict | None
     service_token: dict | None
     sealed_in_status: dict[str, dict | None] = field(default_factory=dict)
+    # Added in #28: see SetupResult note above.
+    tunnel_config: dict | None = None
+    service_token_policy: dict | None = None
 
 
 @dataclass

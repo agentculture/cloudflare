@@ -4,6 +4,24 @@ All notable changes to this project will be documented here. The format
 is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-05-08
+
+### Added
+
+- `cultureflare remote-login setup --service URL`: required flag wiring tunnel public-hostname ingress on the remote-managed tunnel
+- `ensure_tunnel_config` / `get_tunnel_config` helpers for idempotent tunnel ingress configuration
+- `ensure_service_token_policy` / `find_service_token_policy` helpers that attach a `non_identity` policy admitting the service token to its Access app
+- `tunnel-config` and `service-token-policy` step records on `setup` / `teardown`; new `tunnel_config` and `service_token_policy` fields on `show`
+
+### Changed
+
+- `ensure_service_token` now returns a 4-tuple `(client_id, client_secret, created, token_id)` so callers can attach a non_identity policy without a second find
+- `setup()` now uses `strict=False` for the service-token step — re-running setup against an already-provisioned deployment skips the token (secret not rotated) instead of erroring; an idempotent re-run is now the supported repair path
+
+### Fixed
+
+- #28: provisioning a hostname via `remote-login setup` left the tunnel without an ingress rule (cloudflared returns 503) and left the service token without a non_identity policy (programmatic clients 302 to SSO). Both gaps are now closed by the same `setup` invocation.
+
 ## [0.4.0] - 2026-05-08
 
 ### Added

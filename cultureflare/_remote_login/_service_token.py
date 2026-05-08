@@ -21,17 +21,22 @@ def find_service_token(*, account_id: str, name: str) -> dict | None:
 
 def ensure_service_token(
     *, account_id: str, name: str, strict: bool
-) -> tuple[str, str | None, bool]:
+) -> tuple[str, str | None, bool, str | None]:
     """Find or create a service token.
 
-    Returns (client_id, client_secret_or_None, created).
+    Returns (client_id, client_secret_or_None, created, token_id).
+    The CF resource id (``token_id``) is distinct from the public
+    ``client_id`` — only the resource id can be referenced from a
+    non_identity policy's ``include[].service_token.token_id``.
 
     ``strict=True`` (used by setup with --with-service-token): if a
     token of this name already exists, raise — its secret can't be
     re-surfaced and the operator likely wanted a fresh one.
 
-    ``strict=False`` (used by show/teardown planners): return the
-    existing record with secret=None.
+    ``strict=False`` (used by show/teardown planners and by setup
+    after #28): return the existing record with secret=None and the
+    full token_id, so an idempotent re-run can attach a missing
+    non_identity policy without rotating the secret.
     """
     existing = find_service_token(account_id=account_id, name=name)
     if existing is not None:
@@ -48,7 +53,12 @@ def ensure_service_token(
                     "first"
                 ),
             )
-        return existing.get("client_id") or "", None, False
+        return (
+            existing.get("client_id") or "",
+            None,
+            False,
+            existing.get("id"),
+        )
 
     response = _api.http_request(
         "POST",
@@ -60,6 +70,7 @@ def ensure_service_token(
         result.get("client_id") or "",
         result.get("client_secret"),
         True,
+        result.get("id"),
     )
 
 

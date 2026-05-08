@@ -44,16 +44,18 @@ def test_ensure_service_token_raises_when_existing_with_strict(http_stub):
 
 def test_ensure_service_token_returns_existing_with_no_secret_when_lax(http_stub):
     # strict=False means: caller (e.g. teardown's planner) accepts
-    # 'no secret available'. setup() will pass strict=True.
+    # 'no secret available'. Returns the resource id so an idempotent
+    # re-run can still attach a non_identity policy.
     http_stub.queue(_list_envelope(
         {"id": "st-b", "name": "irc-svc", "client_id": "cid-b"},
     ))
-    cid, secret, created = ensure_service_token(
+    cid, secret, created, token_id = ensure_service_token(
         account_id="acc-1", name="irc-svc", strict=False,
     )
     assert cid == "cid-b"
     assert secret is None
     assert created is False
+    assert token_id == "st-b"
 
 
 def test_ensure_service_token_posts_when_absent(http_stub):
@@ -65,12 +67,13 @@ def test_ensure_service_token_posts_when_absent(http_stub):
             "client_id": "cid-new", "client_secret": "secret-shhh",
         },
     })
-    cid, secret, created = ensure_service_token(
+    cid, secret, created, token_id = ensure_service_token(
         account_id="acc-1", name="irc-svc", strict=True,
     )
     assert cid == "cid-new"
     assert secret == "secret-shhh"
     assert created is True
+    assert token_id == "st-new"
     posts = [c for c in http_stub.calls if c[0] == "POST"]
     assert posts[0][2] == {"name": "irc-svc"}
 

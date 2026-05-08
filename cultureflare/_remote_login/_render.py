@@ -23,6 +23,10 @@ def render_setup_markdown(result: SetupResult, *, hostname: str) -> str:
     lines.append(
         f"- **TUNNEL_TOKEN:** {_seal_or_value(result, 'tunnel_token', result.tunnel_token)}"
     )
+    if result.tunnel_service is not None:
+        lines.append(
+            f"- **TUNNEL_INGRESS:** {hostname} → {result.tunnel_service}"
+        )
     lines.append(
         f"- **DNS:** CNAME {hostname} → {result.dns_target} (proxied)"
     )
@@ -45,6 +49,10 @@ def render_setup_markdown(result: SetupResult, *, hostname: str) -> str:
                 f"- **SERVICE_TOKEN_CLIENT_SECRET:** "
                 f"{_seal_or_value(result, 'service_token_client_secret', result.service_token_client_secret)}"
             )
+        if result.service_token_policy_id is not None:
+            lines.append(
+                f"- **SERVICE_TOKEN_POLICY_ID:** {result.service_token_policy_id}"
+            )
     lines.append("")
     lines.append("## Steps")
     for i, step in enumerate(result.steps, start=1):
@@ -61,6 +69,7 @@ def render_setup_json(result: SetupResult, *, hostname: str) -> dict:
             "tunnel_name": result.tunnel_name,
             "tunnel_id": result.tunnel_id,
             "tunnel_token": result.tunnel_token,
+            "tunnel_service": result.tunnel_service,
             "dns": {
                 "record_id": result.dns_record_id,
                 "target": result.dns_target,
@@ -73,6 +82,7 @@ def render_setup_json(result: SetupResult, *, hostname: str) -> dict:
             },
             "service_token_client_id": result.service_token_client_id,
             "service_token_client_secret": result.service_token_client_secret,
+            "service_token_policy_id": result.service_token_policy_id,
             "sealed_in": dict(result.sealed_in),
             "steps": [
                 {"name": s.name, "action": s.action, "detail": s.detail}
@@ -87,6 +97,7 @@ def render_setup_dryrun_markdown(
     hostname: str,
     tunnel_name: str,
     app_name: str,
+    service: str,
     emails: list[str],
     domains: list[str],
     with_service_token: bool,
@@ -99,28 +110,46 @@ def render_setup_dryrun_markdown(
     lines.append("**Dry-run — no changes applied**")
     lines.append("")
     lines.append(f"## Plan for {hostname}")
-    lines.append("1. ensure Zero Trust org (existing required for v1)")
-    lines.append(f"2. ensure tunnel `{tunnel_name}`")
+    step = 0
+
+    def _step() -> int:
+        nonlocal step
+        step += 1
+        return step
+
+    lines.append(f"{_step()}. ensure Zero Trust org (existing required for v1)")
+    lines.append(f"{_step()}. ensure tunnel `{tunnel_name}`")
     lines.append(
-        f"3. ensure DNS CNAME {hostname} → <tunnel_id>.cfargotunnel.com (proxied)"
+        f"{_step()}. ensure tunnel ingress {hostname} → {service}"
     )
     lines.append(
-        f"4. ensure Access app `{app_name}` (session_duration={session_duration})"
+        f"{_step()}. ensure DNS CNAME {hostname} → "
+        "<tunnel_id>.cfargotunnel.com (proxied)"
+    )
+    lines.append(
+        f"{_step()}. ensure Access app `{app_name}` "
+        f"(session_duration={session_duration})"
     )
     policy_parts: list[str] = []
     if emails:
         policy_parts.append(f"allow [{', '.join(emails)}]")
     if domains:
         policy_parts.append(f"allow-domain [{', '.join(domains)}]")
-    lines.append(f"5. ensure allow-policy ({'; '.join(policy_parts)})")
+    lines.append(f"{_step()}. ensure allow-policy ({'; '.join(policy_parts)})")
     if with_service_token:
-        lines.append("6. ensure service-token (one-shot secret)")
+        lines.append(f"{_step()}. ensure service-token (one-shot secret)")
+        lines.append(
+            f"{_step()}. ensure non_identity service-token policy admitting it"
+        )
     if seal_tunnel_name is not None:
         u = seal_user or "<self>"
-        lines.append(f"7. seal tunnel_token into shushu/{u}/{seal_tunnel_name}")
+        lines.append(
+            f"{_step()}. seal tunnel_token into shushu/{u}/{seal_tunnel_name}"
+        )
         if with_service_token and seal_svc_name is not None:
             lines.append(
-                f"8. seal service-token client_secret into shushu/{u}/{seal_svc_name}"
+                f"{_step()}. seal service-token client_secret into "
+                f"shushu/{u}/{seal_svc_name}"
             )
     lines.append("")
     lines.append("Pass --apply to commit.")
@@ -131,6 +160,23 @@ def _row_tunnel(tunnel: dict | None) -> str:
     if tunnel is None:
         return "- **tunnel:** (not found)"
     return f"- **tunnel:** {tunnel.get('name')} (id={tunnel.get('id')})"
+
+
+def _row_tunnel_config(config: dict | None) -> str:
+    """Render the first ingress rule (the public-hostname route).
+
+    Both ``config is None`` (no configuration object set yet) and an
+    explicit empty ``ingress`` list are the same operational gap from
+    #28: cloudflared registers connections then 503s every request.
+    Surface them with the same hint.
+    """
+    rules = ((config or {}).get("config") or {}).get("ingress") or []
+    if not rules:
+        return "- **tunnel-ingress:** (no rules — cloudflared will 503)"
+    head = rules[0]
+    host = head.get("hostname") or "(any)"
+    svc = head.get("service") or "(none)"
+    return f"- **tunnel-ingress:** {host} → {svc}"
 
 
 def _row_dns(dns: dict | None, hostname: str) -> str:
@@ -164,6 +210,20 @@ def _row_service_token(svc: dict | None) -> str:
     )
 
 
+def _row_service_token_policy(svc_policy: dict | None) -> str:
+    """Render the non_identity policy admitting the service token.
+
+    Absence of this policy is the gap from #28 that makes service-token
+    auth fall through to SSO — surface it explicitly.
+    """
+    if svc_policy is None:
+        return (
+            "- **service-token-policy:** (not found — service token "
+            "headers will 302 to SSO)"
+        )
+    return f"- **service-token-policy:** id={svc_policy.get('id')}"
+
+
 def _row_sealed_status(key: str, status: dict | None) -> str:
     if status is None:
         return f"  - {key}: ?? (shushu not installed)"
@@ -189,10 +249,12 @@ def render_show_markdown(result: ShowResult, *, hostname: str) -> str:
         "",
         f"- **zero-trust-org:** {result.team_domain or '(not found)'}",
         _row_tunnel(result.tunnel),
+        _row_tunnel_config(result.tunnel_config),
         _row_dns(result.dns, hostname),
         _row_access_app(result.access_app),
         _row_policies(result.policy),
         _row_service_token(result.service_token),
+        _row_service_token_policy(result.service_token_policy),
     ]
     lines.extend(_rows_sealed_in_status(result.sealed_in_status))
     return "\n".join(lines) + "\n"
@@ -205,10 +267,12 @@ def render_show_json(result: ShowResult, *, hostname: str) -> dict:
             "hostname": hostname,
             "team_domain": result.team_domain,
             "tunnel": result.tunnel,
+            "tunnel_config": result.tunnel_config,
             "dns": result.dns,
             "access_app": result.access_app,
             "policy": result.policy,
             "service_token": result.service_token,
+            "service_token_policy": result.service_token_policy,
             "sealed_in_status": dict(result.sealed_in_status),
         },
     }

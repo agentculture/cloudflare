@@ -3,7 +3,8 @@
 import pytest
 
 from cultureflare._remote_login._tunnel import (
-    find_tunnel, ensure_tunnel, get_tunnel_token, delete_tunnel,
+    delete_tunnel, ensure_tunnel, ensure_tunnel_config,
+    find_tunnel, get_tunnel_config, get_tunnel_token,
 )
 
 
@@ -79,3 +80,125 @@ def test_delete_tunnel_passes_force_true(http_stub):
     assert method == "DELETE"
     assert path == "/accounts/acc-1/cfd_tunnel/tun-b"
     assert query.get("force") == "true"
+
+
+# ---------------------------------------------------------------------------
+# Tunnel ingress configuration (#28)
+# ---------------------------------------------------------------------------
+
+_TUNNEL_CFG_PATH = "/accounts/acc-1/cfd_tunnel/tun-b/configurations"
+
+
+def _config_envelope(ingress):
+    return {
+        "success": True, "errors": [], "messages": [],
+        "result": {"config": {"ingress": ingress}},
+    }
+
+
+def test_get_tunnel_config_returns_result_envelope(http_stub):
+    http_stub.set("GET", _TUNNEL_CFG_PATH, _config_envelope([
+        {"hostname": "x.example.com", "service": "http://localhost:80"},
+        {"service": "http_status:404"},
+    ]))
+    cfg = get_tunnel_config(account_id="acc-1", tunnel_id="tun-b")
+    assert cfg is not None
+    rules = cfg["config"]["ingress"]
+    assert rules[0]["hostname"] == "x.example.com"
+
+
+def test_ensure_tunnel_config_skips_when_ingress_already_matches(http_stub):
+    http_stub.set("GET", _TUNNEL_CFG_PATH, _config_envelope([
+        {"hostname": "x.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ]))
+    changed = ensure_tunnel_config(
+        account_id="acc-1", tunnel_id="tun-b",
+        hostname="x.example.com", service="http://localhost:8080",
+    )
+    assert changed is False
+    assert [c[0] for c in http_stub.calls] == ["GET"]
+
+
+def test_ensure_tunnel_config_puts_when_no_ingress(http_stub):
+    """The exact bug from issue #28 — tunnel created but no ingress rule."""
+    http_stub.set("GET", _TUNNEL_CFG_PATH, _config_envelope([]))
+    http_stub.set("PUT", _TUNNEL_CFG_PATH, _config_envelope([
+        {"hostname": "x.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ]))
+    changed = ensure_tunnel_config(
+        account_id="acc-1", tunnel_id="tun-b",
+        hostname="x.example.com", service="http://localhost:8080",
+    )
+    assert changed is True
+    puts = [c for c in http_stub.calls if c[0] == "PUT"]
+    assert len(puts) == 1
+    payload = puts[0][2]
+    rules = payload["config"]["ingress"]
+    assert rules[0] == {"hostname": "x.example.com", "service": "http://localhost:8080"}
+    assert rules[-1] == {"service": "http_status:404"}
+
+
+def test_ensure_tunnel_config_overwrites_stale_ingress(http_stub):
+    """Existing ingress points at the wrong service — overwrite."""
+    http_stub.set("GET", _TUNNEL_CFG_PATH, _config_envelope([
+        {"hostname": "x.example.com", "service": "http://localhost:9999"},
+        {"service": "http_status:404"},
+    ]))
+    http_stub.set("PUT", _TUNNEL_CFG_PATH, _config_envelope([
+        {"hostname": "x.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ]))
+    changed = ensure_tunnel_config(
+        account_id="acc-1", tunnel_id="tun-b",
+        hostname="x.example.com", service="http://localhost:8080",
+    )
+    assert changed is True
+
+
+def test_ensure_tunnel_config_preserves_other_config_keys(http_stub):
+    """Don't clobber operator-set warp-routing / originRequest etc.
+
+    The PUT endpoint is replace-not-merge — omitting a key resets it.
+    Bug #28 follow-up from qodo review on PR #30.
+    """
+    http_stub.set("GET", _TUNNEL_CFG_PATH, {
+        "success": True, "errors": [], "messages": [],
+        "result": {
+            "version": 7,
+            "config": {
+                "ingress": [{"service": "http_status:404"}],
+                "warp-routing": {"enabled": True},
+                "originRequest": {"connectTimeout": 30},
+            },
+        },
+    })
+    http_stub.set("PUT", _TUNNEL_CFG_PATH, _config_envelope([]))
+    ensure_tunnel_config(
+        account_id="acc-1", tunnel_id="tun-b",
+        hostname="x.example.com", service="http://localhost:8080",
+    )
+    puts = [c for c in http_stub.calls if c[0] == "PUT"]
+    payload = puts[0][2]
+    cfg = payload["config"]
+    # New ingress applied
+    assert cfg["ingress"][0] == {
+        "hostname": "x.example.com", "service": "http://localhost:8080",
+    }
+    # Other keys preserved verbatim
+    assert cfg["warp-routing"] == {"enabled": True}
+    assert cfg["originRequest"] == {"connectTimeout": 30}
+
+
+def test_ensure_tunnel_config_overwrites_when_hostname_mismatch(http_stub):
+    http_stub.set("GET", _TUNNEL_CFG_PATH, _config_envelope([
+        {"hostname": "old.example.com", "service": "http://localhost:8080"},
+        {"service": "http_status:404"},
+    ]))
+    http_stub.set("PUT", _TUNNEL_CFG_PATH, _config_envelope([]))
+    changed = ensure_tunnel_config(
+        account_id="acc-1", tunnel_id="tun-b",
+        hostname="x.example.com", service="http://localhost:8080",
+    )
+    assert changed is True

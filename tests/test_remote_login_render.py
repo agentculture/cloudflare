@@ -74,10 +74,12 @@ def test_render_setup_dryrun_markdown_shows_plan_and_no_secrets():
         app_name="irc.culture.dev",
         emails=["me@example.com"],
         domains=[],
+        service="http://localhost:8080",
         with_service_token=True,
         session_duration="24h",
     )
     assert "Dry-run" in md
+    assert "http://localhost:8080" in md
     assert "## Plan" in md
     assert "TUN-TOK" not in md
     assert "tunnel" in md.lower()
@@ -306,6 +308,7 @@ def test_dryrun_markdown_lists_seal_steps_when_shushu_set():
         tunnel_name="app-example-com",
         app_name="app.example.com",
         emails=["x@y"], domains=[],
+        service="http://localhost:8080",
         with_service_token=True,
         session_duration="24h",
         seal_user="alice",
@@ -323,6 +326,7 @@ def test_dryrun_markdown_omits_seal_when_shushu_unset():
         tunnel_name="app-example-com",
         app_name="app.example.com",
         emails=["x@y"], domains=[],
+        service="http://localhost:8080",
         with_service_token=True,
         session_duration="24h",
         seal_user=None,
@@ -330,6 +334,111 @@ def test_dryrun_markdown_omits_seal_when_shushu_unset():
         seal_svc_name=None,
     )
     assert "seal" not in md.lower()
+
+
+def test_show_markdown_flags_missing_tunnel_ingress():
+    """The exact gap from #28: tunnel exists but config has no ingress."""
+    show = ShowResult(
+        team_domain="ac.cloudflareaccess.com",
+        tunnel={"id": "tun-1", "name": "irc-culture-dev"},
+        tunnel_config={"config": {"ingress": []}},
+        dns=None, access_app=None, policy=None,
+        service_token=None, service_token_policy=None,
+    )
+    md = render_show_markdown(show, hostname="irc.culture.dev")
+    assert "**tunnel-ingress:** (no rules" in md
+    assert "503" in md  # remediation hint in the (no rules) message
+
+
+def test_show_markdown_treats_none_config_as_no_rules():
+    """get_tunnel_config returns None when no config is set yet — same gap."""
+    show = ShowResult(
+        team_domain="ac.cloudflareaccess.com",
+        tunnel={"id": "tun-1", "name": "irc-culture-dev"},
+        tunnel_config=None,
+        dns=None, access_app=None, policy=None,
+        service_token=None, service_token_policy=None,
+    )
+    md = render_show_markdown(show, hostname="irc.culture.dev")
+    assert "**tunnel-ingress:** (no rules — cloudflared will 503)" in md
+    # The misleading "(not found)" must NOT appear on the ingress line.
+    ingress_line = next(
+        line for line in md.splitlines() if "tunnel-ingress" in line
+    )
+    assert "(not found)" not in ingress_line
+
+
+def test_show_markdown_renders_tunnel_ingress_when_present():
+    show = ShowResult(
+        team_domain="ac.cloudflareaccess.com",
+        tunnel={"id": "tun-1", "name": "irc-culture-dev"},
+        tunnel_config={"config": {"ingress": [
+            {"hostname": "irc.culture.dev", "service": "http://localhost:8080"},
+            {"service": "http_status:404"},
+        ]}},
+        dns=None, access_app=None, policy=None,
+        service_token=None, service_token_policy=None,
+    )
+    md = render_show_markdown(show, hostname="irc.culture.dev")
+    assert (
+        "**tunnel-ingress:** irc.culture.dev → http://localhost:8080" in md
+    )
+
+
+def test_show_markdown_flags_missing_service_token_policy():
+    """The other half of #28: token exists but no non_identity policy."""
+    show = ShowResult(
+        team_domain="ac.cloudflareaccess.com",
+        tunnel=None, tunnel_config=None, dns=None,
+        access_app={"id": "app-1"},
+        policy={"id": "pol-1"},
+        service_token={"id": "st-1", "name": "irc-svc", "client_id": "cid"},
+        service_token_policy=None,
+    )
+    md = render_show_markdown(show, hostname="irc.culture.dev")
+    assert "**service-token-policy:** (not found" in md
+    assert "302" in md  # remediation hint
+
+
+def test_show_json_includes_new_fields():
+    show = ShowResult(
+        team_domain="ac.cloudflareaccess.com",
+        tunnel={"id": "tun-1"},
+        tunnel_config={"config": {"ingress": [
+            {"hostname": "irc.culture.dev", "service": "http://localhost:8080"},
+        ]}},
+        dns=None, access_app={"id": "app-1"},
+        policy={"id": "pol-1"},
+        service_token={"id": "st-1"},
+        service_token_policy={"id": "pol-svc"},
+    )
+    env = render_show_json(show, hostname="irc.culture.dev")
+    r = env["result"]
+    assert r["tunnel_config"]["config"]["ingress"][0]["service"] == \
+        "http://localhost:8080"
+    assert r["service_token_policy"] == {"id": "pol-svc"}
+
+
+def test_setup_markdown_renders_tunnel_ingress_and_svc_policy():
+    result = SetupResult(
+        team_domain="ac.cloudflareaccess.com",
+        tunnel_id="tun-1", tunnel_name="irc-culture-dev",
+        tunnel_token="TUN-TOK",
+        tunnel_service="http://localhost:8765",
+        dns_record_id="rec-1",
+        dns_target="tun-1.cfargotunnel.com",
+        access_app_id="app-1",
+        policy_id="pol-1",
+        policy_emails=["me@example.com"],
+        policy_domains=[],
+        service_token_client_id="CID",
+        service_token_client_secret="SEC",
+        service_token_policy_id="pol-svc",
+        steps=[],
+    )
+    md = render_setup_markdown(result, hostname="irc.culture.dev")
+    assert "**TUNNEL_INGRESS:** irc.culture.dev → http://localhost:8765" in md
+    assert "**SERVICE_TOKEN_POLICY_ID:** pol-svc" in md
 
 
 def test_show_json_includes_sealed_in_status():

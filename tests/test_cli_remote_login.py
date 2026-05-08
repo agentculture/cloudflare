@@ -40,6 +40,7 @@ def test_setup_dry_run_prints_plan_and_does_not_post(http_stub, capsys):
     rc = main([
         "remote-login", "setup",
         "--hostname", "irc.culture.dev",
+        "--service", "http://localhost:8080",
         "--allow", "me@example.com",
     ])
     out = capsys.readouterr().out
@@ -47,6 +48,7 @@ def test_setup_dry_run_prints_plan_and_does_not_post(http_stub, capsys):
     assert "Dry-run" in out
     assert "## Plan" in out
     assert "irc.culture.dev" in out
+    assert "http://localhost:8080" in out
     posts = [c for c in http_stub.calls if c[0] == "POST"]
     assert posts == []
 
@@ -57,8 +59,38 @@ def test_setup_requires_at_least_one_allow(http_stub, capsys):
     rc = main([
         "remote-login", "setup",
         "--hostname", "irc.culture.dev",
+        "--service", "http://localhost:8080",
     ])
     assert rc != 0
+
+
+def test_setup_requires_service(http_stub, capsys):
+    # argparse raises SystemExit at parse time; the structured error
+    # message still goes to stderr via _CfafiArgumentParser.error().
+    with pytest.raises(SystemExit) as exc:
+        main([
+            "remote-login", "setup",
+            "--hostname", "irc.culture.dev",
+            "--allow", "me@example.com",
+        ])
+    err = capsys.readouterr().err
+    assert exc.value.code != 0
+    assert "--service" in err
+
+
+def test_setup_rejects_invalid_service_url(http_stub, capsys):
+    http_stub.set("GET", "/user/tokens/verify", _verify_alive())
+    http_stub.set("GET", "/zones", _zones_one())
+    rc = main([
+        "remote-login", "setup",
+        "--hostname", "irc.culture.dev",
+        "--allow", "me@example.com",
+        "--service", "localhost:8080",  # missing scheme
+    ])
+    err = capsys.readouterr().err
+    assert rc != 0
+    assert "--service" in err
+    assert "scheme://host" in err
 
 
 def test_setup_preflight_blocks_when_token_inactive(http_stub, capsys):
@@ -66,6 +98,7 @@ def test_setup_preflight_blocks_when_token_inactive(http_stub, capsys):
     rc = main([
         "remote-login", "setup",
         "--hostname", "irc.culture.dev",
+        "--service", "http://localhost:8080",
         "--allow", "me@example.com",
     ])
     err = capsys.readouterr().err
@@ -120,14 +153,17 @@ def test_teardown_dry_run_does_not_delete(http_stub, capsys):
 
 def test_setup_argparse_accepts_no_shushu_flag(remote_login_parser):
     args = remote_login_parser.parse_args([
-        "remote-login", "setup", "--hostname", "app.example.com", "--allow", "x@y",
+        "remote-login", "setup", "--hostname", "app.example.com",
+        "--service", "http://localhost:8080", "--allow", "x@y",
     ])
     assert args.shushu is None
+    assert args.service == "http://localhost:8080"
 
 
 def test_setup_argparse_bare_shushu_yields_empty_string(remote_login_parser):
     args = remote_login_parser.parse_args([
         "remote-login", "setup", "--hostname", "app.example.com",
+        "--service", "http://localhost:8080",
         "--allow", "x@y", "--shushu",
     ])
     assert args.shushu == ""
@@ -136,6 +172,7 @@ def test_setup_argparse_bare_shushu_yields_empty_string(remote_login_parser):
 def test_setup_argparse_shushu_with_user(remote_login_parser):
     args = remote_login_parser.parse_args([
         "remote-login", "setup", "--hostname", "app.example.com",
+        "--service", "http://localhost:8080",
         "--allow", "x@y", "--shushu=alice",
     ])
     assert args.shushu == "alice"
@@ -176,6 +213,7 @@ def test_cmd_setup_dryrun_with_shushu_lists_seal_steps(capsys, monkeypatch):
 
     ns = argparse.Namespace(
         hostname="app.example.com", allow=["x@y"], allow_domain=[],
+        service="http://localhost:8080",
         with_service_token=True, session_duration="24h",
         tunnel_name=None, app_name=None, service_token_name=None,
         json=False, apply=False, shushu="alice",

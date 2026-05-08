@@ -17,6 +17,7 @@ def _ctx(hostname="irc.culture.dev"):
         zone_id="zid-1",
         hostname=hostname,
         names=derive_names(hostname=hostname),
+        service="http://localhost:8080",
     )
 
 
@@ -26,6 +27,7 @@ def _ctx_for(hostname):
         zone_id="zid-1",
         hostname=hostname,
         names=derive_names(hostname=hostname),
+        service="http://localhost:8080",
     )
 
 
@@ -61,6 +63,19 @@ def _program_setup_happy_path(
     http_stub.set(
         "GET", f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/token",
         {"success": True, "errors": [], "messages": [], "result": "TUN-TOK"},
+    )
+    http_stub.set(
+        "GET", f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
+        {"success": True, "errors": [], "messages": [],
+         "result": {"config": {"ingress": []}}},
+    )
+    http_stub.set(
+        "PUT", f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
+        {"success": True, "errors": [], "messages": [],
+         "result": {"config": {"ingress": [
+             {"hostname": hostname, "service": "http://localhost:8080"},
+             {"service": "http_status:404"},
+         ]}}},
     )
     http_stub.set("GET", f"/zones/{zone_id}/dns_records", {
         "success": True, "errors": [], "messages": [],
@@ -144,10 +159,27 @@ def test_setup_runs_all_six_steps_in_order_when_nothing_exists(http_stub):
     assert result.policy_id == "pol-1"
     assert result.service_token_client_id == "CID"
     assert result.service_token_client_secret == "SEC"
+    assert result.tunnel_service == "http://localhost:8080"
+    assert result.service_token_policy_id is not None
     assert [s.name for s in result.steps] == [
-        "zero-trust-org", "tunnel", "dns", "access-app",
-        "allow-policy", "service-token",
+        "zero-trust-org", "tunnel", "tunnel-config", "dns", "access-app",
+        "allow-policy", "service-token", "service-token-policy",
     ]
+    # The non_identity policy POST must reference the token's *resource id*,
+    # not the (different) public client_id — otherwise CF accepts the
+    # policy but service-token requests still fall through to SSO.
+    posts = [c for c in http_stub.calls if c[0] == "POST"
+             and c[1] == "/accounts/acc-1/access/apps/app-1/policies"]
+    decisions = [(p[2] or {}).get("decision") for p in posts]
+    assert "non_identity" in decisions
+    non_identity_post = next(
+        p for p in posts if (p[2] or {}).get("decision") == "non_identity"
+    )
+    include = (non_identity_post[2] or {}).get("include") or []
+    assert any(
+        (rule.get("service_token") or {}).get("token_id") == "st-1"
+        for rule in include
+    )
 
 
 def test_setup_skips_service_token_step_when_not_requested(http_stub):
@@ -160,6 +192,16 @@ def test_setup_skips_service_token_step_when_not_requested(http_stub):
     http_stub.set(
         "GET", "/accounts/acc-1/cfd_tunnel/tun-1/token",
         {"success": True, "errors": [], "messages": [], "result": "TUN-TOK"},
+    )
+    http_stub.set(
+        "GET", "/accounts/acc-1/cfd_tunnel/tun-1/configurations",
+        {"success": True, "errors": [], "messages": [],
+         "result": {"config": {"ingress": []}}},
+    )
+    http_stub.set(
+        "PUT", "/accounts/acc-1/cfd_tunnel/tun-1/configurations",
+        {"success": True, "errors": [], "messages": [],
+         "result": {"config": {"ingress": []}}},
     )
     http_stub.set("GET", "/zones/zid-1/dns_records", _empty_list())
     http_stub.set("POST", "/zones/zid-1/dns_records",
@@ -210,6 +252,14 @@ def _program_show_happy_path(
         _list_envelope({"id": tunnel_id, "name": tunnel_name}),
     )
     http_stub.set(
+        "GET", f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
+        {"success": True, "errors": [], "messages": [],
+         "result": {"config": {"ingress": [
+             {"hostname": hostname, "service": "http://localhost:8080"},
+             {"service": "http_status:404"},
+         ]}}},
+    )
+    http_stub.set(
         "GET", f"/zones/{zone_id}/dns_records",
         _list_envelope({
             "id": "rec-1", "type": "CNAME", "name": hostname,
@@ -239,6 +289,11 @@ def test_show_reports_partial_state(http_stub):
     http_stub.set(
         "GET", "/accounts/acc-1/cfd_tunnel",
         _list_envelope({"id": "tun-1", "name": "irc-culture-dev"}),
+    )
+    http_stub.set(
+        "GET", "/accounts/acc-1/cfd_tunnel/tun-1/configurations",
+        {"success": True, "errors": [], "messages": [],
+         "result": {"config": {"ingress": []}}},
     )
     http_stub.set("GET", "/zones/zid-1/dns_records", _empty_list())
     http_stub.set("GET", "/accounts/acc-1/access/apps", _empty_list())
@@ -285,11 +340,23 @@ def _program_teardown_happy_path(
     )
     http_stub.set(
         "GET", f"/accounts/{account_id}/access/apps/{app_id}/policies",
-        _list_envelope({"id": policy_id, "name": policy_name}),
+        _list_envelope(
+            {"id": policy_id, "name": policy_name},
+            {
+                "id": "pol-svc",
+                "name": f"{hostname}-svc-allow",
+                "decision": "non_identity",
+                "include": [{"service_token": {"token_id": svc_id}}],
+            },
+        ),
     )
     http_stub.set(
         "DELETE", f"/accounts/{account_id}/access/apps/{app_id}/policies/{policy_id}",
         {"success": True, "errors": [], "messages": [], "result": {"id": policy_id}},
+    )
+    http_stub.set(
+        "DELETE", f"/accounts/{account_id}/access/apps/{app_id}/policies/pol-svc",
+        {"success": True, "errors": [], "messages": [], "result": {"id": "pol-svc"}},
     )
     http_stub.set(
         "DELETE", f"/accounts/{account_id}/access/apps/{app_id}",
@@ -322,7 +389,8 @@ def test_teardown_reverses_setup_skipping_zt_org(http_stub):
     result = teardown(ctx=_ctx(), keep_tunnel=False)
     assert isinstance(result, TeardownResult)
     assert [s.name for s in result.steps] == [
-        "service-token", "allow-policy", "access-app", "dns", "tunnel",
+        "service-token", "service-token-policy",
+        "allow-policy", "access-app", "dns", "tunnel",
     ]
     delete_paths = [c[1] for c in http_stub.calls if c[0] == "DELETE"]
     assert all("organizations" not in p for p in delete_paths)

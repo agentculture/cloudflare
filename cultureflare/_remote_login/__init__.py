@@ -16,7 +16,8 @@ from cultureflare._remote_login._access_app import (
 )
 from cultureflare._remote_login._access_org import find_org
 from cultureflare._remote_login._access_policy import (
-    delete_policy, ensure_allow_policy, find_policy,
+    delete_policy, ensure_allow_policy, ensure_service_token_policy,
+    find_policy, find_service_token_policy,
 )
 from cultureflare._remote_login._common import (
     Context, SetupResult, ShowResult, StepRecord, TeardownResult,
@@ -27,7 +28,8 @@ from cultureflare._remote_login._service_token import (
     delete_service_token, ensure_service_token, find_service_token,
 )
 from cultureflare._remote_login._tunnel import (
-    delete_tunnel, ensure_tunnel, find_tunnel, get_tunnel_token,
+    delete_tunnel, ensure_tunnel, ensure_tunnel_config,
+    find_tunnel, get_tunnel_config, get_tunnel_token,
 )
 from cultureflare._secrets import _shushu_sink
 from cultureflare.cli._errors import EXIT_USER_ERROR, CfafiError
@@ -158,6 +160,66 @@ def _whoami() -> str:
         return "-"
 
 
+def _action(created: bool) -> str:
+    """Map ``created`` to the canonical step-record action verb."""
+    return "ensured" if created else "skipped"
+
+
+def _ensure_service_token_step(
+    *,
+    ctx: Context,
+    app_id: str,
+    with_service_token: bool,
+    steps: list[StepRecord],
+) -> tuple[str | None, str | None, str | None]:
+    """Run the optional service-token + non_identity-policy pair.
+
+    Returns ``(client_id, client_secret, policy_id)`` for the
+    ``SetupResult``. Each tuple element is None when the corresponding
+    resource wasn't requested or is not retrievable. Mutates ``steps``
+    in place so the orchestrator's step record list keeps its order.
+
+    Strict=False on the token ensure: re-running setup against a
+    deployment whose token already exists must be safe. The secret is
+    one-shot; re-runs return ``client_id`` with ``secret=None`` and a
+    "skipped (existing; secret not rotated)" step. Operators wanting a
+    fresh secret teardown first.
+    """
+    if not with_service_token:
+        return None, None, None
+
+    svc_cid, svc_secret, svc_created, svc_token_id = ensure_service_token(
+        account_id=ctx.account_id,
+        name=ctx.names.service_token_name,
+        strict=False,
+    )
+    svc_detail = f"client_id={svc_cid}"
+    if not svc_created:
+        svc_detail += " (existing; secret not rotated)"
+    steps.append(StepRecord(
+        name="service-token", action=_action(svc_created), detail=svc_detail,
+    ))
+
+    if not svc_token_id:
+        return svc_cid, svc_secret, None
+
+    # Non-identity policy admitting the token. Without it, requests
+    # carrying CF-Access-Client-Id/Secret are 302-redirected to SSO
+    # regardless of the existing email allow-policy.
+    svc_policy_id, svc_policy_created = ensure_service_token_policy(
+        account_id=ctx.account_id,
+        app_id=app_id,
+        token_id=svc_token_id,
+        name=ctx.names.service_token_policy_name,
+    )
+    steps.append(StepRecord(
+        name="service-token-policy",
+        action=_action(svc_policy_created),
+        detail=f"id={svc_policy_id}",
+    ))
+    return svc_cid, svc_secret, svc_policy_id
+
+
 def setup(
     *,
     ctx: Context,
@@ -175,6 +237,16 @@ def setup(
     """
     if seal is None:
         seal = derive_seal_plan(hostname=ctx.hostname, shushu_arg=None)
+    if not ctx.service:
+        raise CfafiError(
+            code=EXIT_USER_ERROR,
+            message="setup requires a local service URL for tunnel ingress",
+            remediation=(
+                "pass --service http://localhost:<port> on `cultureflare "
+                "remote-login setup` so cloudflared can route the public "
+                "hostname to your local process"
+            ),
+        )
     steps: list[StepRecord] = []
 
     # 1. Zero Trust org — verified, never created here.
@@ -200,13 +272,27 @@ def setup(
         account_id=ctx.account_id, name=ctx.names.tunnel_name,
     )
     steps.append(StepRecord(
-        name="tunnel",
-        action="ensured" if tunnel_created else "skipped",
+        name="tunnel", action=_action(tunnel_created),
         detail=f"{ctx.names.tunnel_name} (id={tunnel_id})",
     ))
     tunnel_token = get_tunnel_token(
         account_id=ctx.account_id, tunnel_id=tunnel_id,
     )
+
+    # 2b. Tunnel ingress config — must follow tunnel creation.
+    # Without this, cloudflared registers connections then 503s every
+    # request because no ingress rule maps the public hostname to a
+    # local service. Idempotent: skipped when ingress already matches.
+    tunnel_config_changed = ensure_tunnel_config(
+        account_id=ctx.account_id,
+        tunnel_id=tunnel_id,
+        hostname=ctx.hostname,
+        service=ctx.service,
+    )
+    steps.append(StepRecord(
+        name="tunnel-config", action=_action(tunnel_config_changed),
+        detail=f"{ctx.hostname} → {ctx.service}",
+    ))
 
     # 3. DNS CNAME → tunnel.
     dns_id, dns_created = ensure_cname(
@@ -214,8 +300,7 @@ def setup(
     )
     dns_target = f"{tunnel_id}.cfargotunnel.com"
     steps.append(StepRecord(
-        name="dns",
-        action="ensured" if dns_created else "skipped",
+        name="dns", action=_action(dns_created),
         detail=f"CNAME {ctx.hostname} → {dns_target}",
     ))
 
@@ -227,9 +312,7 @@ def setup(
         session_duration=session_duration,
     )
     steps.append(StepRecord(
-        name="access-app",
-        action="ensured" if app_created else "skipped",
-        detail=f"id={app_id}",
+        name="access-app", action=_action(app_created), detail=f"id={app_id}",
     ))
 
     # 5. Allow-policy.
@@ -239,25 +322,16 @@ def setup(
         emails=emails, domains=domains,
     )
     steps.append(StepRecord(
-        name="allow-policy",
-        action="ensured" if policy_created else "skipped",
+        name="allow-policy", action=_action(policy_created),
         detail=f"id={policy_id}",
     ))
 
-    # 6. Service token (optional).
-    svc_cid: str | None = None
-    svc_secret: str | None = None
-    if with_service_token:
-        svc_cid, svc_secret, svc_created = ensure_service_token(
-            account_id=ctx.account_id,
-            name=ctx.names.service_token_name,
-            strict=True,
-        )
-        steps.append(StepRecord(
-            name="service-token",
-            action="ensured" if svc_created else "skipped",
-            detail=f"client_id={svc_cid}",
-        ))
+    # 6. Service token + non_identity policy (optional, paired).
+    svc_cid, svc_secret, svc_policy_id = _ensure_service_token_step(
+        ctx=ctx, app_id=app_id,
+        with_service_token=with_service_token,
+        steps=steps,
+    )
 
     sealed_in: dict[str, str] = {}
     if seal.enabled:
@@ -277,6 +351,7 @@ def setup(
         tunnel_id=tunnel_id,
         tunnel_name=ctx.names.tunnel_name,
         tunnel_token=tunnel_token,
+        tunnel_service=ctx.service,
         dns_record_id=dns_id,
         dns_target=dns_target,
         access_app_id=app_id,
@@ -285,6 +360,7 @@ def setup(
         policy_domains=list(domains),
         service_token_client_id=svc_cid,
         service_token_client_secret=svc_secret,
+        service_token_policy_id=svc_policy_id,
         steps=steps,
         sealed_in=sealed_in,
     )
@@ -312,6 +388,13 @@ def show(*, ctx: Context, seal: SealPlan | None = None) -> ShowResult:
     tunnel = find_tunnel(
         account_id=ctx.account_id, name=ctx.names.tunnel_name,
     )
+    tunnel_config = (
+        get_tunnel_config(
+            account_id=ctx.account_id, tunnel_id=tunnel["id"],
+        )
+        if tunnel is not None
+        else None
+    )
     dns = find_cname(zone_id=ctx.zone_id, hostname=ctx.hostname)
 
     # Probe shushu unconditionally (independent of CF/ZT state) so that
@@ -323,8 +406,9 @@ def show(*, ctx: Context, seal: SealPlan | None = None) -> ShowResult:
     if org is None:
         return ShowResult(
             team_domain=None,
-            tunnel=tunnel, dns=dns,
-            access_app=None, policy=None, service_token=None,
+            tunnel=tunnel, tunnel_config=tunnel_config, dns=dns,
+            access_app=None, policy=None,
+            service_token=None, service_token_policy=None,
             sealed_in_status=sealed_status,
         )
     app = find_app(account_id=ctx.account_id, hostname=ctx.hostname)
@@ -340,14 +424,25 @@ def show(*, ctx: Context, seal: SealPlan | None = None) -> ShowResult:
     svc = find_service_token(
         account_id=ctx.account_id, name=ctx.names.service_token_name,
     )
+    svc_policy = (
+        find_service_token_policy(
+            account_id=ctx.account_id,
+            app_id=app["id"],
+            token_id=svc["id"],
+        )
+        if app is not None and svc is not None and svc.get("id")
+        else None
+    )
 
     return ShowResult(
         team_domain=org.get("auth_domain"),
         tunnel=tunnel,
+        tunnel_config=tunnel_config,
         dns=dns,
         access_app=app,
         policy=policy,
         service_token=svc,
+        service_token_policy=svc_policy,
         sealed_in_status=sealed_status,
     )
 
@@ -379,9 +474,28 @@ def teardown(
             name="service-token", action="deleted", detail=f"id={svc['id']}",
         ))
 
-    # 2. Allow-policy + 3. Access app.
+    # 2. Allow-policy + service-token policy + 3. Access app.
     app = find_app(account_id=ctx.account_id, hostname=ctx.hostname)
     if app is not None:
+        # Service-token policy: matched by include[].service_token.token_id.
+        # ``svc`` was captured BEFORE the token delete in step 1, so we
+        # still have the right id to look the policy up by even though
+        # the token itself is gone. Delete-app would cascade-delete any
+        # leftover policy too, but we surface the step explicitly.
+        if svc is not None:
+            svc_policy = find_service_token_policy(
+                account_id=ctx.account_id, app_id=app["id"],
+                token_id=svc["id"],
+            )
+            if svc_policy is not None:
+                delete_policy(
+                    account_id=ctx.account_id, app_id=app["id"],
+                    policy_id=svc_policy["id"],
+                )
+                steps.append(StepRecord(
+                    name="service-token-policy", action="deleted",
+                    detail=f"id={svc_policy['id']}",
+                ))
         policy = find_policy(
             account_id=ctx.account_id, app_id=app["id"],
             name=ctx.names.policy_name,

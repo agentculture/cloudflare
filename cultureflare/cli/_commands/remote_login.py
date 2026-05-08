@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from urllib.parse import urlparse
 
 from cultureflare._env import require_env
 from cultureflare._remote_login import setup, show, teardown
@@ -16,6 +17,30 @@ from cultureflare._remote_login._render import (
 )
 from cultureflare.cli._errors import EXIT_USER_ERROR, CfafiError
 from cultureflare.cli._output import emit_json, emit_result
+
+
+def _validate_service_url(value: str) -> str:
+    """Reject empty / scheme-less / host-less ``--service`` values.
+
+    Catches the common shape mistakes that would POST garbage into CF
+    and produce a 503 the operator has to hunt for. The check is
+    ``scheme://host[:port]`` — i.e. cloudflared targets that have a
+    netloc (``http://``, ``https://``, ``tcp://``). Schemes without
+    a netloc (``unix:/path``) aren't accepted here; if you need that
+    shape, set the tunnel ingress directly via the dashboard or API
+    and skip this CLI's ingress step.
+    """
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc:
+        raise CfafiError(
+            code=EXIT_USER_ERROR,
+            message=f"--service must be scheme://host[:port], got {value!r}",
+            remediation=(
+                "use --service http://localhost:<port> "
+                "(or https://… / tcp://… for non-HTTP backends)"
+            ),
+        )
+    return value
 
 
 _SHUSHU_HELP = (
@@ -49,6 +74,7 @@ def _ctx_with_overrides(args: argparse.Namespace) -> Context:
     return Context(
         account_id=base.account_id, zone_id=base.zone_id,
         hostname=base.hostname, names=names,
+        service=getattr(args, "service", None),
     )
 
 
@@ -63,6 +89,7 @@ def _emit_setup_dryrun(
             "hostname": args.hostname,
             "tunnel_name": ctx.names.tunnel_name,
             "app_name": ctx.names.app_name,
+            "service": args.service,
             "with_service_token": args.with_service_token,
             "session_duration": args.session_duration,
             "emails": list(args.allow),
@@ -89,6 +116,7 @@ def _emit_setup_dryrun(
                 hostname=args.hostname,
                 tunnel_name=ctx.names.tunnel_name,
                 app_name=ctx.names.app_name,
+                service=args.service,
                 emails=list(args.allow),
                 domains=list(args.allow_domain),
                 with_service_token=args.with_service_token,
@@ -130,6 +158,7 @@ def cmd_setup(args: argparse.Namespace) -> None:
             message="at least one of --allow / --allow-domain is required",
             remediation="pass --allow user@example.com or --allow-domain @example.com",
         )
+    args.service = _validate_service_url(args.service)
     check_token_alive()
     ctx = _ctx_with_overrides(args)
     seal = derive_seal_plan(hostname=args.hostname, shushu_arg=args.shushu)
@@ -206,6 +235,14 @@ def register(sub: argparse._SubParsersAction) -> None:
     s.add_argument(
         "--allow-domain", action="append", default=[],
         help="Email-domain to allow, e.g. @example.com (repeatable).",
+    )
+    s.add_argument(
+        "--service", required=True,
+        help=(
+            "Local service URL the tunnel routes the public hostname to, "
+            "e.g. http://localhost:8080. Required: a missing ingress rule "
+            "is exactly the gap that makes cloudflared reply 503."
+        ),
     )
     s.add_argument("--tunnel-name", default=None,
                    help="Override the derived tunnel name.")
