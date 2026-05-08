@@ -58,18 +58,30 @@ def cmd_setup(args: argparse.Namespace) -> None:
 
     if not args.apply:
         if json_mode:
+            result_body: dict = {
+                "dry_run": True,
+                "hostname": args.hostname,
+                "tunnel_name": ctx.names.tunnel_name,
+                "app_name": ctx.names.app_name,
+                "with_service_token": args.with_service_token,
+                "session_duration": args.session_duration,
+                "emails": list(args.allow),
+                "domains": list(args.allow_domain),
+            }
+            if seal.enabled:
+                u = seal.user or "<self>"
+                result_body["sealed_in"] = {
+                    "tunnel_token": (
+                        f"shushu/{u}/{seal.tunnel_token_target.name}"
+                    ),
+                    "service_token_client_secret": (
+                        f"shushu/{u}/{seal.service_token_secret_target.name}"
+                        if args.with_service_token else None
+                    ),
+                }
             emit_json({
                 "success": True, "errors": [], "messages": ["dry-run: no changes applied"],
-                "result": {
-                    "dry_run": True,
-                    "hostname": args.hostname,
-                    "tunnel_name": ctx.names.tunnel_name,
-                    "app_name": ctx.names.app_name,
-                    "with_service_token": args.with_service_token,
-                    "session_duration": args.session_duration,
-                    "emails": list(args.allow),
-                    "domains": list(args.allow_domain),
-                },
+                "result": result_body,
             })
         else:
             emit_result(
@@ -81,6 +93,9 @@ def cmd_setup(args: argparse.Namespace) -> None:
                     domains=list(args.allow_domain),
                     with_service_token=args.with_service_token,
                     session_duration=args.session_duration,
+                    seal_user=seal.user if seal.enabled else None,
+                    seal_tunnel_name=seal.tunnel_token_target.name if seal.enabled else None,
+                    seal_svc_name=seal.service_token_secret_target.name if seal.enabled else None,
                 ),
                 json_mode=False,
             )

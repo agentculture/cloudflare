@@ -91,6 +91,9 @@ def render_setup_dryrun_markdown(
     domains: list[str],
     with_service_token: bool,
     session_duration: str,
+    seal_user: str | None = None,
+    seal_tunnel_name: str | None = None,
+    seal_svc_name: str | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append("**Dry-run — no changes applied**")
@@ -112,6 +115,13 @@ def render_setup_dryrun_markdown(
     lines.append(f"5. ensure allow-policy ({'; '.join(policy_parts)})")
     if with_service_token:
         lines.append("6. ensure service-token (one-shot secret)")
+    if seal_tunnel_name is not None:
+        u = seal_user or "<self>"
+        lines.append(f"7. seal tunnel_token into shushu/{u}/{seal_tunnel_name}")
+        if with_service_token and seal_svc_name is not None:
+            lines.append(
+                f"8. seal service-token client_secret into shushu/{u}/{seal_svc_name}"
+            )
     lines.append("")
     lines.append("Pass --apply to commit.")
     return "\n".join(lines) + "\n"

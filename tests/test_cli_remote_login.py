@@ -153,3 +153,34 @@ def test_teardown_argparse_accepts_shushu(remote_login_parser):
         "remote-login", "teardown", "--hostname", "app.example.com", "--shushu",
     ])
     assert args.shushu == ""
+
+
+# ---------------------------------------------------------------------------
+# Task 12: dry-run with --shushu includes seal steps
+# ---------------------------------------------------------------------------
+
+def test_cmd_setup_dryrun_with_shushu_lists_seal_steps(capsys, monkeypatch):
+    import argparse
+    from cultureflare.cli._commands.remote_login import cmd_setup
+
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acc-1")
+    monkeypatch.setattr(
+        "cultureflare.cli._commands.remote_login.check_token_alive",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "cultureflare.cli._commands.remote_login.resolve_zone",
+        lambda hostname: ("zone-1", "example.com"),
+    )
+
+    ns = argparse.Namespace(
+        hostname="app.example.com", allow=["x@y"], allow_domain=[],
+        with_service_token=True, session_duration="24h",
+        tunnel_name=None, app_name=None, service_token_name=None,
+        json=False, apply=False, shushu="alice",
+    )
+    cmd_setup(ns)
+    out = capsys.readouterr().out
+    assert "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_TUNNEL_TOKEN" in out
+    assert "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_SVC_SECRET" in out

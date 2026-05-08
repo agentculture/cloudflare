@@ -294,3 +294,39 @@ def test_setup_markdown_unchanged_when_no_seal():
     md = render_setup_markdown(r, hostname="app.example.com")
     assert "visible-raw-token" in md
     assert "<sealed:" not in md
+
+
+# ---------------------------------------------------------------------------
+# Task 12: dry-run seal-step tests
+# ---------------------------------------------------------------------------
+
+def test_dryrun_markdown_lists_seal_steps_when_shushu_set():
+    md = render_setup_dryrun_markdown(
+        hostname="app.example.com",
+        tunnel_name="app-example-com",
+        app_name="app.example.com",
+        emails=["x@y"], domains=[],
+        with_service_token=True,
+        session_duration="24h",
+        seal_user="alice",
+        seal_tunnel_name="CULTUREFLARE_APP_EXAMPLE_COM_TUNNEL_TOKEN",
+        seal_svc_name="CULTUREFLARE_APP_EXAMPLE_COM_SVC_SECRET",
+    )
+    assert "seal tunnel_token" in md
+    assert "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_TUNNEL_TOKEN" in md
+    assert "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_SVC_SECRET" in md
+
+
+def test_dryrun_markdown_omits_seal_when_shushu_unset():
+    md = render_setup_dryrun_markdown(
+        hostname="app.example.com",
+        tunnel_name="app-example-com",
+        app_name="app.example.com",
+        emails=["x@y"], domains=[],
+        with_service_token=True,
+        session_duration="24h",
+        seal_user=None,
+        seal_tunnel_name=None,
+        seal_svc_name=None,
+    )
+    assert "seal" not in md.lower()
