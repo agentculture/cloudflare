@@ -209,7 +209,7 @@ def setup(
     )
 
 
-def show(*, ctx: Context) -> ShowResult:
+def show(*, ctx: Context, seal: SealPlan | None = None) -> ShowResult:
     """Read every resource setup would create, returning presence/absence.
 
     When Zero Trust is disabled (``find_org`` returns None), every other
@@ -218,7 +218,15 @@ def show(*, ctx: Context) -> ShowResult:
     fields as None — the operator gets a clean "(not found)" rendering
     instead of a fresh 4xx mid-`show`. Tunnel and DNS aren't
     Access-scoped, so we still query them.
+
+    When ``seal`` is provided and enabled, probes shushu for each sealed
+    target and populates ``sealed_in_status``. If shushu is not installed
+    ("not found" in the error message), show is non-fatal: each entry
+    becomes None rather than raising.
     """
+    if seal is None:
+        seal = derive_seal_plan(hostname=ctx.hostname, shushu_arg=None)
+
     org = find_org(account_id=ctx.account_id)
     tunnel = find_tunnel(
         account_id=ctx.account_id, name=ctx.names.tunnel_name,
@@ -243,6 +251,34 @@ def show(*, ctx: Context) -> ShowResult:
     svc = find_service_token(
         account_id=ctx.account_id, name=ctx.names.service_token_name,
     )
+
+    sealed_status: dict[str, dict | None] = {}
+    if seal.enabled:
+        for key, target in (
+            ("tunnel_token", seal.tunnel_token_target),
+            ("service_token_client_secret", seal.service_token_secret_target),
+        ):
+            try:
+                meta = _shushu_sink.probe(target)
+            except CfafiError as exc:
+                if "not found" in exc.message.lower():
+                    sealed_status[key] = None
+                    continue
+                raise
+            marker_user = seal.user or _whoami()
+            if meta is None:
+                sealed_status[key] = {
+                    "present": False,
+                    "name": f"shushu/{marker_user}/{target.name}",
+                    "source": None,
+                }
+            else:
+                sealed_status[key] = {
+                    "present": True,
+                    "name": f"shushu/{marker_user}/{target.name}",
+                    "source": meta.get("source"),
+                }
+
     return ShowResult(
         team_domain=org.get("auth_domain"),
         tunnel=tunnel,
@@ -250,6 +286,7 @@ def show(*, ctx: Context) -> ShowResult:
         access_app=app,
         policy=policy,
         service_token=svc,
+        sealed_in_status=sealed_status,
     )
 
 

@@ -8,7 +8,7 @@ from cultureflare._remote_login._common import (
 )
 from cultureflare._remote_login._seal_plan import derive_seal_plan
 from cultureflare._secrets._types import ShushuTarget
-from cultureflare.cli._errors import CfafiError, EXIT_API
+from cultureflare.cli._errors import CfafiError, EXIT_API, EXIT_USER_ERROR
 
 
 def _ctx(hostname="irc.culture.dev"):
@@ -183,6 +183,51 @@ def test_setup_skips_service_token_step_when_not_requested(http_stub):
     assert "service-token" not in [s.name for s in result.steps]
     paths = [c[1] for c in http_stub.calls]
     assert "/accounts/acc-1/access/service_tokens" not in paths
+
+
+def _program_show_happy_path(
+    http_stub,
+    *,
+    account_id="acc-1",
+    zone_id="zid-1",
+    hostname="app.example.com",
+    tunnel_id="tun-1",
+    app_id="app-1",
+    policy_id="pol-1",
+    svc_id="st-1",
+):
+    """Program all HTTP stubs for a happy-path show() run (all resources exist)."""
+    tunnel_name = hostname.replace(".", "-")
+    svc_name = f"{hostname}-svc"
+    policy_name = f"{hostname}-allow"
+
+    http_stub.set("GET", f"/accounts/{account_id}/access/organizations", {
+        "success": True, "errors": [], "messages": [],
+        "result": {"name": "AC", "auth_domain": "ac.cloudflareaccess.com"},
+    })
+    http_stub.set(
+        "GET", f"/accounts/{account_id}/cfd_tunnel",
+        _list_envelope({"id": tunnel_id, "name": tunnel_name}),
+    )
+    http_stub.set(
+        "GET", f"/zones/{zone_id}/dns_records",
+        _list_envelope({
+            "id": "rec-1", "type": "CNAME", "name": hostname,
+            "content": f"{tunnel_id}.cfargotunnel.com", "proxied": True,
+        }),
+    )
+    http_stub.set(
+        "GET", f"/accounts/{account_id}/access/apps",
+        _list_envelope({"id": app_id, "domain": hostname}),
+    )
+    http_stub.set(
+        "GET", f"/accounts/{account_id}/access/apps/{app_id}/policies",
+        _list_envelope({"id": policy_id, "name": policy_name}),
+    )
+    http_stub.set(
+        "GET", f"/accounts/{account_id}/access/service_tokens",
+        _list_envelope({"id": svc_id, "name": svc_name, "client_id": "CID"}),
+    )
 
 
 def test_show_reports_partial_state(http_stub):
@@ -417,3 +462,66 @@ def test_setup_without_seal_returns_secrets_in_clear(http_stub):
     assert result.tunnel_token != ""
     assert result.service_token_client_secret is not None
     assert result.sealed_in == {}
+
+
+def test_show_with_seal_probes_both_targets(http_stub, monkeypatch):
+    _program_show_happy_path(http_stub, hostname="app.example.com")
+
+    probed: list[ShushuTarget] = []
+
+    def fake_probe(target):
+        probed.append(target)
+        if target.name.endswith("_TUNNEL_TOKEN"):
+            return {"name": target.name, "hidden": True,
+                    "source": "cultureflare/remote-login"}
+        return None
+
+    monkeypatch.setattr(
+        "cultureflare._secrets._shushu_sink.probe", fake_probe
+    )
+
+    plan = derive_seal_plan(hostname="app.example.com", shushu_arg="alice")
+    ctx = _ctx_for("app.example.com")
+    result = show(ctx=ctx, seal=plan)
+
+    assert len(probed) == 2
+    assert result.sealed_in_status["tunnel_token"]["present"] is True
+    assert result.sealed_in_status["service_token_client_secret"]["present"] is False
+
+
+def test_show_without_seal_does_not_probe(http_stub, monkeypatch):
+    _program_show_happy_path(http_stub, hostname="app.example.com")
+
+    def fake_probe(target):
+        raise AssertionError("must not probe when seal disabled")
+
+    monkeypatch.setattr(
+        "cultureflare._secrets._shushu_sink.probe", fake_probe
+    )
+
+    plan = derive_seal_plan(hostname="app.example.com", shushu_arg=None)
+    ctx = _ctx_for("app.example.com")
+    result = show(ctx=ctx, seal=plan)
+    assert result.sealed_in_status == {}
+
+
+def test_show_with_seal_handles_shushu_missing(http_stub, monkeypatch):
+    _program_show_happy_path(http_stub, hostname="app.example.com")
+
+    def fake_probe(target):
+        raise CfafiError(
+            code=EXIT_USER_ERROR,
+            message="shushu binary not found",
+            remediation="uv tool install shushu",
+        )
+
+    monkeypatch.setattr(
+        "cultureflare._secrets._shushu_sink.probe", fake_probe
+    )
+
+    plan = derive_seal_plan(hostname="app.example.com", shushu_arg="")
+    ctx = _ctx_for("app.example.com")
+    result = show(ctx=ctx, seal=plan)
+    # show is non-fatal: render None for each entry
+    assert result.sealed_in_status["tunnel_token"] is None
+    assert result.sealed_in_status["service_token_client_secret"] is None
