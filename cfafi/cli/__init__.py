@@ -8,11 +8,15 @@ Mirrors afi-cli's parser pattern (see /home/spark/git/afi-cli/afi/cli).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from cfafi import __version__
 from cfafi.cli._errors import EXIT_USER_ERROR, CfafiError
 from cfafi.cli._output import emit_error
+
+_ALIASES = ("cfafi", "cultureflare")
+_CANONICAL_PROG = "cultureflare"
 
 
 class _CfafiArgumentParser(argparse.ArgumentParser):
@@ -43,6 +47,24 @@ def _argv_has_json(argv: list[str] | None) -> bool:
     return any(t == "--json" or t.startswith("--json=") for t in tokens)
 
 
+def _resolve_prog() -> str:
+    """Stable program name for argparse's `prog`.
+
+    Maps sys.argv[0]'s basename to one of the canonical CLI names.
+    Real console-script invocations as `cfafi` or `cultureflare` use
+    that name; everything else (`python -m cfafi`, whose argv[0] is
+    `__main__.py`; `pytest` driving `main([...])`; programmatic
+    callers with empty argv) falls back to canonical "cultureflare".
+    Keeps help / usage / version output stable regardless of how the
+    caller arrived here.
+    """
+    if sys.argv and sys.argv[0]:
+        prog = os.path.basename(sys.argv[0])
+        if prog in _ALIASES:
+            return prog
+    return _CANONICAL_PROG
+
+
 def _build_parser() -> argparse.ArgumentParser:
     # Deferred imports keep cli import-side effects tight.
     from cfafi.cli._commands import dns as _dns
@@ -53,8 +75,8 @@ def _build_parser() -> argparse.ArgumentParser:
     from cfafi.cli._commands import zones as _zones
 
     parser = _CfafiArgumentParser(
-        prog="cfafi",
-        description="cfafi — CloudFlare Agent First Interface",
+        prog=_resolve_prog(),
+        description="CloudFlare Agent First Interface (cfafi / cultureflare)",
     )
     parser.add_argument(
         "--version",

@@ -263,20 +263,50 @@ through the environment variable.
 
 ## 8. PyPI Trusted Publisher (maintainer setup, one-time)
 
-Publishing to PyPI uses OIDC — no API tokens stored anywhere. Before
-the first release:
+Publishing to PyPI uses OIDC — no API tokens stored anywhere. The
+repo dual-publishes the same source under two distribution names:
 
-1. Sign in to PyPI as the AgentCulture org owner.
-2. Project → Publishing → Add a new pending publisher:
+- **`cfafi`** — frozen at v0.2.2 (final cfafi release).
+- **`cultureflare`** — canonical name going forward.
+
+Each name needs its own pending publisher pair (PyPI + TestPyPI) and
+its own GitHub environment. Publish flow lives in
+`.github/workflows/publish.yml`.
+
+### `cfafi` (legacy, frozen at 0.2.2)
+
+1. PyPI → `cfafi` project → Publishing → pending publisher:
    - Publisher: GitHub
    - Owner: `agentculture`
    - Repo: `cfafi`
-   - Workflow name: `publish.yml`
+   - Workflow: `publish.yml`
    - Environment: `pypi`
-3. Repeat on TestPyPI with environment `testpypi`.
+2. Repeat on TestPyPI with environment `testpypi`.
+3. GitHub: Settings → Environments → `pypi` and `testpypi`.
 
-GitHub side: `Settings → Environments → New environment` for both
-`pypi` and `testpypi`. No secrets needed.
+### `cultureflare` (canonical going forward)
+
+1. PyPI → `cultureflare` project → Publishing → pending publisher:
+   - Publisher: GitHub
+   - Owner: `agentculture`
+   - Repo: `cfafi` *(repo rename is deferred; the publisher follows
+     the source repo, not the package name)*
+   - Workflow: `publish.yml`
+   - Environment: `pypi-cultureflare`
+2. Repeat on TestPyPI with environment `testpypi-cultureflare`.
+3. GitHub: Settings → Environments → `pypi-cultureflare` and
+   `testpypi-cultureflare`. No secrets needed.
+
+The publish workflow patches `pyproject.toml` in-place to swap the
+distribution name (`name = "cfafi"` → `name = "cultureflare"`) for
+the cultureflare-named build, then `uv build` + `uv publish` in the
+`pypi-cultureflare` / `testpypi-cultureflare` environment uploads to
+the cultureflare project. The cfafi-named jobs run unchanged.
+
+Until the cultureflare environments + pending publishers are wired,
+the cultureflare publish steps in CI run with `continue-on-error:
+true` so they don't block the cfafi publish path. Remove that guard
+in a follow-up PR once verification is complete.
 
 ## 9. Operator token scopes (for `cfafi remote-login`)
 
