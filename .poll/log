@@ -1,0 +1,4 @@
+ITER=1 STATE=OPEN qodo_full=0 copilot=0
+ITER=2 STATE=OPEN qodo_full=0 copilot=0
+ITER=3 STATE=OPEN qodo_full=1 copilot=0
+ITER=4 STATE=OPEN qodo_full=1 copilot=1

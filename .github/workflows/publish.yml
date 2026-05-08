@@ -69,9 +69,11 @@ jobs:
   # `cultureflare` distribution name and push it to TestPyPI. The
   # `pypi-cultureflare` / `testpypi-cultureflare` GitHub environments
   # must exist and be wired to the cultureflare Trusted Publisher
-  # pending publishers (see docs/SETUP.md § 9). The publish step uses
+  # pending publishers (see docs/SETUP.md § 8). The publish step uses
   # `continue-on-error` so an unwired environment doesn't block the PR;
-  # remove that guard once the publisher pair is verified.
+  # remove that guard once the publisher pair is verified. A follow-up
+  # `Surface cultureflare publish status` step still emits a `::warning::`
+  # annotation when the publish step's outcome isn't `success`.
   test-publish-cultureflare:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: test
@@ -99,11 +101,21 @@ jobs:
           echo "Publishing cultureflare ${DEV_VERSION} to TestPyPI"
 
       - name: Build and publish cultureflare to TestPyPI
+        id: cultureflare_publish
         continue-on-error: true
         run: |
           rm -rf dist/
           uv build
           uv publish --publish-url https://test.pypi.org/legacy/ --trusted-publishing always --check-url https://test.pypi.org/simple/
+
+      - name: Surface cultureflare publish status
+        if: always()
+        run: |
+          if [ "${{ steps.cultureflare_publish.outcome }}" = "success" ]; then
+            echo "::notice::cultureflare TestPyPI publish succeeded (${DEV_VERSION})"
+          else
+            echo "::warning::cultureflare TestPyPI publish step did not succeed (outcome=${{ steps.cultureflare_publish.outcome }}). Verify the testpypi-cultureflare environment + Trusted Publisher are wired (docs/SETUP.md § 8); remove continue-on-error once stable."
+          fi
 
       - name: Print install commands
         if: always()
@@ -154,8 +166,18 @@ jobs:
           sed -i 's/^name = "cfafi"$/name = "cultureflare"/' pyproject.toml
 
       - name: Build and publish cultureflare to PyPI
+        id: cultureflare_publish
         continue-on-error: true
         run: |
           rm -rf dist/
           uv build
           uv publish --trusted-publishing always --check-url https://pypi.org/simple/
+
+      - name: Surface cultureflare publish status
+        if: always()
+        run: |
+          if [ "${{ steps.cultureflare_publish.outcome }}" = "success" ]; then
+            echo "::notice::cultureflare PyPI publish succeeded"
+          else
+            echo "::warning::cultureflare PyPI publish step did not succeed (outcome=${{ steps.cultureflare_publish.outcome }}). Verify the pypi-cultureflare environment + Trusted Publisher are wired (docs/SETUP.md § 8); remove continue-on-error once stable."
+          fi

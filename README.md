@@ -82,6 +82,29 @@ Every command supports `--json` for raw envelope output suitable for
 `jq` pipelines and downstream agents. Run `cultureflare learn` for the
 full rundown.
 
+## `--json` output
+
+Every command emits the canonical CloudFlare envelope shape
+(`{success, errors, messages, result}`) under `--json`. Examples
+(IDs and tokens elided as `…`):
+
+```text
+$ cultureflare whoami --json
+{"success":true,"errors":[],"messages":[{"code":10000,"message":"This API Token is valid and active"}],"result":{"id":"…","status":"active","not_before":null,"expires_on":null}}
+
+$ cultureflare zones list --json
+{"success":true,"errors":[],"messages":[],"result":[{"id":"…","name":"culture.dev","status":"active","plan":{"name":"Free Website"}}],"result_info":{"page":1,"total_pages":1,"count":1,"total_count":1}}
+
+$ cultureflare dns create culture.dev TXT _cfafi-test "hello" --json
+{"success":true,"errors":[],"messages":["dry-run: no changes applied"],"result":{"dry_run":true,"zone_id":"…","would_post":{"type":"TXT","name":"_cfafi-test","content":"hello","ttl":1,"proxied":false,"comment":"Managed by cfafi in agentculture/cfafi"}}}
+
+$ cultureflare remote-login show --hostname irc.culture.dev --json
+{"success":true,"errors":[],"messages":[],"result":{"hostname":"irc.culture.dev","team_domain":"agentculture.cloudflareaccess.com","tunnel":null,"dns":null,"access_app":null,"policy":null,"service_token":null}}
+```
+
+Errors emit on stderr with the same envelope plus `code`,
+`message`, and `remediation` fields.
+
 ## Credentials
 
 Two environment variables, no `.env` walking by the installed CLI:

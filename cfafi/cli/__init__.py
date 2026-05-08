@@ -8,11 +8,15 @@ Mirrors afi-cli's parser pattern (see /home/spark/git/afi-cli/afi/cli).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from cfafi import __version__
 from cfafi.cli._errors import EXIT_USER_ERROR, CfafiError
 from cfafi.cli._output import emit_error
+
+_ALIASES = ("cfafi", "cultureflare")
+_CANONICAL_PROG = "cultureflare"
 
 
 class _CfafiArgumentParser(argparse.ArgumentParser):
@@ -44,21 +48,21 @@ def _argv_has_json(argv: list[str] | None) -> bool:
 
 
 def _resolve_prog() -> str:
-    """Return the basename of the invoking executable.
+    """Stable program name for argparse's `prog`.
 
-    Lets `cultureflare --version` print `cultureflare 0.2.2` while
-    `cfafi --version` prints `cfafi 0.2.2` — both console scripts
-    point at this module, but argparse's prog (used in help text,
-    errors, and version output) follows whichever alias was invoked.
-    Falls back to "cultureflare" (the canonical name) if argv is
-    empty, e.g. under a programmatic call to ``main()``.
+    Maps sys.argv[0]'s basename to one of the canonical CLI names.
+    Real console-script invocations as `cfafi` or `cultureflare` use
+    that name; everything else (`python -m cfafi`, whose argv[0] is
+    `__main__.py`; `pytest` driving `main([...])`; programmatic
+    callers with empty argv) falls back to canonical "cultureflare".
+    Keeps help / usage / version output stable regardless of how the
+    caller arrived here.
     """
-    import os
     if sys.argv and sys.argv[0]:
         prog = os.path.basename(sys.argv[0])
-        if prog:
+        if prog in _ALIASES:
             return prog
-    return "cultureflare"
+    return _CANONICAL_PROG
 
 
 def _build_parser() -> argparse.ArgumentParser:

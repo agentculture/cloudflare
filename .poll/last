@@ -1,0 +1,130 @@
+════════════════ INLINE REVIEW COMMENTS (5) ════════════════
+──────────────────────────────────────────────────
+ID: 3204369065  |  Thread: UNRESOLVED  |  Reply-to: none
+File: README.md:83
+Thread ID: PRRT_kwDOSIidIc6Abwtr
+Author: qodo-code-review[bot]
+
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/action-required.png" height="20" alt="Action required">
+
+1\. Missing <b><i>--json</i></b> output examples <code>📎 Requirement gap</code> <code>⚙ Maintainability</code>
+
+<pre>
+The updated public docs state that every command supports <b><i>--json</i></b>, but they do not provide example
+JSON output for each implemented command. This violates the requirement to document example JSON
+outputs for <b><i>whoami</i></b>, <b><i>zones list</i></b>, <b><i>dns create</i></b>, <b><i>learn</i></b>, and <b><i>explain</i></b> to make programmatic
+integration predictable.
+</pre>
+... (truncated)
+
+──────────────────────────────────────────────────
+ID: 3204369069  |  Thread: UNRESOLVED  |  Reply-to: none
+File: cfafi/cli/__init__.py:61
+Thread ID: PRRT_kwDOSIidIc6Abwtv
+Author: qodo-code-review[bot]
+
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/action-required.png" height="20" alt="Action required">
+
+2\. Unvalidated prog name <code>🐞 Bug</code> <code>≡ Correctness</code>
+
+<pre>
+<b><i>_resolve_prog()</i></b> uses <b><i>os.path.basename(sys.argv[0])</i></b> as argparse <b><i>prog</i></b> for all invocations, so
+<b><i>python -m cfafi</i></b> produces help/version output like <b><i>__main__.py 0.2.2</i></b> instead of
+<b><i>cfafi</i></b>/<b><i>cultureflare</i></b>. This also makes programmatic calls to <b><i>main([...])</i></b> inherit the host process
+name (e.g., test runner), breaking stable output and tests that expect <b><i>cfafi</i></b> in <b><i>--help</i></b> text.
+</pre>
+... (truncated)
+
+──────────────────────────────────────────────────
+ID: 3204371394  |  Thread: UNRESOLVED  |  Reply-to: none
+File: cfafi/cli/__init__.py:61
+Thread ID: PRRT_kwDOSIidIc6AbxKn
+Author: Copilot
+
+`_resolve_prog()` always derives `prog` from `sys.argv[0]`, which means programmatic calls like `main([...])` (used throughout the test suite) will render help/errors/version with the caller’s executable name (e.g., `pytest`) rather than `cfafi`/`cultureflare`. It also makes `python -m cfafi ...` likely show `__main__.py` as the program name. Consider treating `argv is not None` as a signal to use a stable canonical prog (e.g., `cultureflare`), and/or special-casing `__main__.py` to return `cultureflare`/`cfafi` instead of the module filename.
+
+──────────────────────────────────────────────────
+ID: 3204371458  |  Thread: UNRESOLVED  |  Reply-to: none
+File: .github/workflows/publish.yml:72
+Thread ID: PRRT_kwDOSIidIc6AbxLc
+Author: Copilot
+
+The comment references `docs/SETUP.md § 9`, but the Trusted Publisher instructions are in `docs/SETUP.md` section **8** (“PyPI Trusted Publisher”). Please update the section reference so the workflow documentation points to the correct location.
+
+
+──────────────────────────────────────────────────
+ID: 3204371495  |  Thread: UNRESOLVED  |  Reply-to: none
+File: .github/workflows/publish.yml:161
+Thread ID: PRRT_kwDOSIidIc6AbxL6
+Author: Copilot
+
+With `continue-on-error: true`, the workflow can report success on `push` even if the cultureflare publish failed (including cases where the `name` swap didn’t happen). To avoid silent misses, consider adding an `if: always()` follow-up step that inspects the publish step outcome and emits a `::warning::`/`::error::` notice (or fails the job once the environment is wired).
+
+
+
+════════════════ ISSUE COMMENTS (3) ════════════════
+──────────────────────────────────────────────────
+ID: 4400632685  |  Author: qodo-code-review[bot]  |  Created: 2026-05-07T20:01:25Z
+
+<h3>Review Summary by Qodo</h3>
+
+Dual-publish to cultureflare while maintaining cfafi backward compatibility
+
+<code>✨ Enhancement</code> <code>📝 Documentation</code>
+
+<img src="https://www.qodo.ai/wp-content/uploads/2025/11/light-grey-line.svg" height="10%" alt="Grey Divider">
+
+<h3>Walkthroughs</h3>
+
+... (truncated)
+
+──────────────────────────────────────────────────
+ID: 4400633028  |  Author: qodo-code-review[bot]  |  Created: 2026-05-07T20:01:28Z
+
+<h3>Code Review by Qodo</h3>
+
+<code>🐞 Bugs (2)</code>  <code>📘 Rule violations (0)</code>  <code>📎 Requirement gaps (1)</code>
+
+<details><summary><strong>Context used</strong></summary>
+
+<div>&#x2705; Tickets: <a href="https://github.com/agentculture/cfafi/issues/21"><code>🎫 docs: clarify Cloudflare scope, credential setup, and migration from bash skills</code></a></div>
+</details>
+
+<img src="https://www.qodo.ai/wp-content/uploads/2025/11/light-grey-line.svg" height="10%" alt="Grey Divider">
+... (truncated)
+
+──────────────────────────────────────────────────
+ID: 4400633974  |  Author: sonarqubecloud[bot]  |  Created: 2026-05-07T20:01:38Z
+
+## [![Quality Gate Passed](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/checks/QualityGateBadge/qg-passed-20px.png 'Quality Gate Passed')](https://sonarcloud.io/dashboard?id=agentculture_cloudflare&pullRequest=25) **Quality Gate passed**  
+Issues  
+![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0 New issues](https://sonarcloud.io/project/issues?id=agentculture_cloudflare&pullRequest=25&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  
+![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/accepted-16px.png '') [0 Accepted issues](https://sonarcloud.io/project/issues?id=agentculture_cloudflare&pullRequest=25&issueStatuses=ACCEPTED)
+
+Measures  
+![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0 Security Hotspots](https://sonarcloud.io/project/security_hotspots?id=agentculture_cloudflare&pullRequest=25&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  
+![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0.0% Coverage on New Code](https://sonarcloud.io/component_measures?id=agentculture_cloudflare&pullRequest=25&metric=new_coverage&view=list)  
+![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0.0% Duplication on New Code](https://sonarcloud.io/component_measures?id=agentculture_cloudflare&pullRequest=25&metric=new_duplicated_lines_density&view=list)  
+  
+... (truncated)
+
+
+════════════════ TOP-LEVEL REVIEWS (1) ════════════════
+──────────────────────────────────────────────────
+Review ID: 4247345828  |  Author: copilot-pull-request-reviewer[bot]  |  State: COMMENTED  |  Submitted: 2026-05-07T20:05:37Z
+
+## Pull request overview
+
+This PR finalizes the transition plan from the `cfafi` PyPI distribution name to `cultureflare`, while keeping the underlying Python package/module (`cfafi`) and CLI behavior compatible. It bumps the release to `0.2.2`, adds a `cultureflare` console-script alias, updates the publish workflow to dual-publish to both PyPI project names, and refreshes public docs to clarify scope/credentials/hybrid Python+bash status (closing #21).
+
+**Changes:**
+- Add a `cultureflare` console script pointing at the same CLI entry point as `cfafi`, and update argparse `prog` resolution to reflect the invoked alias.
+- Extend `.github/workflows/publish.yml` to build/publish a second artifact after swapping the distribution name in `pyproject.toml`.
+- Rewrite/expand README + SETUP docs and add a 0.2.2 changelog entry documenting the rename and dual-publish plan.
+
+### Reviewed changes
+... (truncated)
+
+
+════════════════ SONARCLOUD NEW ISSUES (0) ════════════════
+(quality gate passed — no new issues on this PR)
