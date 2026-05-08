@@ -27,7 +27,7 @@ orient against live CF and the skills themselves, in this order:
    repo). Claude Code persists per-project memory under
    `~/.claude/projects/<slug>/memory/`, where `<slug>` is a
    filename-safe encoding of this repo's absolute path
-   (e.g. `/home/alice/src/cultureflare` → `-home-alice-src-cultureflare`).
+   (e.g. `<HOME>/src/cultureflare` → `-<home>-src-cultureflare`).
    Read `MEMORY.md` in that directory for conversation-scoped
    agreements (site structure, applied-resource IDs, workflow
    preferences). Only your own sessions have written there — freshly
@@ -35,12 +35,16 @@ orient against live CF and the skills themselves, in this order:
 
 ## Layout
 
-Four skills under `.claude/skills/`:
+Skills under `.claude/skills/`:
 
 - `cultureflare/` — read-only inventory (zones, DNS, Workers, Pages, status).
 - `cultureflare-write/` — mutations; dry-run by default, `--apply` to commit.
   Carries `templates/` and `references/` (including `cf-api-gotchas.md`).
-- `pr-review/` — vendored PR comment fetch/reply/resolve.
+- `cicd/` — PR-review workflow (vendored from steward 0.7.0): portability lint,
+  workflow orchestrator, reviewer-readiness loop, batch reply, alignment-delta.
+  Renamed from `pr-review` to match the AgentCulture standard.
+- `communicate/` — cross-repo issue posts (auto-signed `- cultureflare (Claude)`)
+  and Culture mesh channel messages. Vendored from steward 0.8.0.
 - `poll/` — background reviewer-wait subagent.
 - `cultureflare/` (package) — Python CLI installed via `uv tool install cultureflare`; entry point `cultureflare`. Noun/verb surface (`cultureflare <noun> <verb>`) with markdown-default + `--json` output and dry-run / `--apply` safety for mutations. See `pyproject.toml` and `docs/superpowers/specs/2026-04-24-cfafi-v0.1.0-python-cli-design.md`.
 
@@ -102,7 +106,7 @@ exists; this section is authoritative for *what we plan next*.
 
 ## PR workflow
 
-All work goes through a feature branch + PR + automated review cycle (qodo, Copilot, SonarCloud). The vendored `pr-review` skill at `.claude/skills/pr-review/` owns the details — read its `SKILL.md` for the full workflow. Four cheat-sheet points:
+All work goes through a feature branch + PR + automated review cycle (qodo, Copilot, SonarCloud). The `cicd` skill at `.claude/skills/cicd/` owns the details — read its `SKILL.md` for the full workflow. Four cheat-sheet points:
 
 - **Before you start: pull latest `main` and fork the branch from there.**
 
@@ -115,5 +119,5 @@ All work goes through a feature branch + PR + automated review cycle (qodo, Copi
   Do this even if you think you're up to date. PRs in this repo squash-merge, which collapses their commits into a single new commit on `main`; any branch forked before that squash still carries the original commits and will hit spurious add/add conflicts on rebase. Starting fresh from the latest `main` avoids the whole class of problem.
 
 - **After `gh pr create`, immediately invoke the `poll` skill.** It spawns a background subagent that watches the PR and notifies you only when both qodo and Copilot have finished. Cheaper than self-paced wakeups because the main session doesn't burn context on heartbeats. See `.claude/skills/poll/SKILL.md`.
-- **Fetch ALL review feedback with one call:** `bash .claude/skills/pr-review/scripts/pr-comments.sh <PR>`. It returns inline comments, issue comments, top-level reviews, and SonarCloud new issues in a single pass — don't hand-roll `gh api` / `curl sonarcloud.io` calls.
-- **Triage / reply / resolve** via the `pr-review` skill once the poll wakes you.
+- **Fetch ALL review feedback with one call:** `bash .claude/skills/cicd/scripts/pr-comments.sh <PR>` (or `workflow.sh await <PR>` for the readiness-loop + status + comments combo). It returns inline comments, issue comments, top-level reviews, and SonarCloud new issues in a single pass — don't hand-roll `gh api` / `curl sonarcloud.io` calls.
+- **Triage / reply / resolve** via the `cicd` skill once the poll wakes you.

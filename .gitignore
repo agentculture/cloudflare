@@ -215,3 +215,6 @@ __marimo__/
 # Python package layout
 .venv/
 .poll/
+
+# Per-machine cicd / communicate skill config (committed example only)
+.claude/skills.local.yaml

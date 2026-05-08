@@ -20,7 +20,7 @@ subagent decides reviews are ready.
 
 ## When to use
 
-- **Right after `gh pr create`.** The pr-review skill's *Auto-poll
+- **Right after `gh pr create`.** The cicd skill's *Auto-poll
   after PR creation* section delegates here — invoke once, then
   resume other work.
 - Whenever the user wants to wait for automated reviewer feedback
@@ -34,8 +34,8 @@ checks state, and reschedules. For a 5–15 minute wait that's a lot of
 cache-window churn for "still waiting."
 
 A background subagent owns its own context. It polls with
-`bash .claude/skills/pr-review/scripts/pr-comments.sh` (the same
-single-call fetcher the pr-review skill uses), only emits a
+`bash .claude/skills/cicd/scripts/pr-comments.sh` (the same
+single-call fetcher the cicd skill uses), only emits a
 notification when the wait is over, and the main session pays the
 context cost once — at the end.
 
@@ -70,11 +70,11 @@ only job is to wait until both automated reviewers
 (qodo-code-review and Copilot) have posted their full reviews, or
 until the PR is merged/closed. Then return a short outcome summary.
 
-Use the project's own fetch script — do NOT hand-roll gh api calls:
+Use the project's own fetch script — do NOT hand-roll gh api calls.
+Run from the cultureflare repo root (parent agent's CWD):
 
 ```sh
-cd /home/spark/git/cloudflare
-bash .claude/skills/pr-review/scripts/pr-comments.sh PR_NUMBER
+bash .claude/skills/cicd/scripts/pr-comments.sh PR_NUMBER
 ```
 
 Loop up to 30 times with `sleep 60` between iterations (~30-minute
@@ -108,7 +108,7 @@ Final report (≤10 lines):
 - Copilot: ready / not-posted
 - SonarCloud (from the script's section 4): N issues / quality gate passed
 - Iterations used / 30
-- Suggested next step: "Run /pr-review for PR PR_NUMBER" if both ready;
+- Suggested next step: "Run /cicd for PR PR_NUMBER" if both ready;
   "PR was merged before reviewers finished" if MERGED; "Hit
   30-iteration cap, may need to re-poll" if TIMEOUT.
 
@@ -120,8 +120,8 @@ return. You only verify readiness and report.
 
 When the subagent's notification arrives, the parent should:
 
-1. Run `bash .claude/skills/pr-review/scripts/pr-comments.sh PR_NUMBER` to refetch the now-ready feedback (the subagent's report is just headlines).
-2. Invoke the `pr-review` skill to triage, fix, push, reply, and resolve.
+1. Run `bash .claude/skills/cicd/scripts/pr-comments.sh PR_NUMBER` to refetch the now-ready feedback (the subagent's report is just headlines).
+2. Invoke the `cicd` skill to triage, fix, push, reply, and resolve.
 
 ## Stopping early
 

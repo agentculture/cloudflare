@@ -4,6 +4,22 @@ All notable changes to this project will be documented here. The format
 is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-08
+
+### Added
+
+- skills/cicd: PR-review workflow with portability lint, reviewer-readiness loop, batch reply, alignment-delta — vendored from steward 0.7.0; replaces the old pr-review skill
+- skills/communicate: cross-repo GitHub issue posts (auto-signed `- cultureflare (Claude)`) and Culture mesh channel messages — vendored from steward 0.8.0
+- portability-lint carve-outs for ~/.claude/projects/ and ~/.config/
+
+### Changed
+
+- CLAUDE.md and poll/SKILL.md now reference cicd skill paths instead of pr-review
+
+### Fixed
+
+- Pre-existing portability hits in CLAUDE.md (a fictional home-dir example) and the v0.1.0 design spec (an absolute sibling-repo path) rewritten as portable workspace-relative references.
+
 ## [0.5.0] - 2026-05-08
 
 ### Added

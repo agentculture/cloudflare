@@ -1,0 +1,16 @@
+# Per-machine config for cultureflare's skills.
+# Copy this to skills.local.yaml (git-ignored) and adjust for your environment.
+# Skills read skills.local.yaml first, falling back to this example.
+
+# Path to the Culture server's agent manifest (suffix → directory mapping).
+# Used by: communicate (resolving channel targets when more verbs land here),
+# and by future cicd integrations once cultureflare joins the mesh.
+culture_server_yaml: ~/.culture/server.yaml
+
+# Sibling project paths checked during the cicd alignment-delta step.
+# Workspace-relative paths (../foo) are preferred. Skills skip entries
+# that don't exist on disk, so commenting out missing ones isn't required.
+sibling_projects:
+  - ../culture
+  - ../steward
+  - ../citation-cli
