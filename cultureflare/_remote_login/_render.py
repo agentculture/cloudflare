@@ -14,7 +14,12 @@ def render_setup_markdown(result: SetupResult, *, hostname: str) -> str:
     lines.append(f"- **CF_TEAM_DOMAIN:** {result.team_domain or '(not set)'}")
     lines.append(f"- **TUNNEL_NAME:** {result.tunnel_name}")
     lines.append(f"- **TUNNEL_ID:** {result.tunnel_id}")
-    lines.append(f"- **TUNNEL_TOKEN:** {result.tunnel_token}")
+    if "tunnel_token" in result.sealed_in:
+        lines.append(
+            f"- **TUNNEL_TOKEN:** <sealed: {result.sealed_in['tunnel_token']}>"
+        )
+    else:
+        lines.append(f"- **TUNNEL_TOKEN:** {result.tunnel_token}")
     lines.append(
         f"- **DNS:** CNAME {hostname} → {result.dns_target} (proxied)"
     )
@@ -29,11 +34,17 @@ def render_setup_markdown(result: SetupResult, *, hostname: str) -> str:
         lines.append(
             f"- **SERVICE_TOKEN_CLIENT_ID:** {result.service_token_client_id}"
         )
-    if result.service_token_client_secret is not None:
-        lines.append(
-            f"- **SERVICE_TOKEN_CLIENT_SECRET:** "
-            f"{result.service_token_client_secret}"
-        )
+        if "service_token_client_secret" in result.sealed_in:
+            lines.append(
+                f"- **SERVICE_TOKEN_CLIENT_SECRET:** "
+                f"<sealed: {result.sealed_in['service_token_client_secret']}>"
+            )
+        else:
+            if result.service_token_client_secret is not None:
+                lines.append(
+                    f"- **SERVICE_TOKEN_CLIENT_SECRET:** "
+                    f"{result.service_token_client_secret}"
+                )
     lines.append("")
     lines.append("## Steps")
     for i, step in enumerate(result.steps, start=1):
@@ -62,6 +73,7 @@ def render_setup_json(result: SetupResult, *, hostname: str) -> dict:
             },
             "service_token_client_id": result.service_token_client_id,
             "service_token_client_secret": result.service_token_client_secret,
+            "sealed_in": dict(result.sealed_in),
             "steps": [
                 {"name": s.name, "action": s.action, "detail": s.detail}
                 for s in result.steps
@@ -144,6 +156,16 @@ def render_show_markdown(result: ShowResult, *, hostname: str) -> str:
         )
     else:
         lines.append("- **service-token:** (not found)")
+    if result.sealed_in_status:
+        lines.append("- **sealed-in:**")
+        for key, status in result.sealed_in_status.items():
+            if status is None:
+                lines.append(f"  - {key}: ?? (shushu not installed)")
+                continue
+            state = "present" if status.get("present") else "absent"
+            src = status.get("source")
+            tail = f" (source: {src})" if src else ""
+            lines.append(f"  - {key}: {status.get('name')} — {state}{tail}")
     return "\n".join(lines) + "\n"
 
 

@@ -194,3 +194,103 @@ def test_render_setup_markdown_renders_domains_only_policy():
     md = render_setup_markdown(result, hostname="irc.culture.dev")
     assert "**POLICY:** allow-domain [@example.com]" in md
     assert "allow [" not in md
+
+
+# ---------------------------------------------------------------------------
+# Task 7: sealed-marker tests
+# ---------------------------------------------------------------------------
+
+def _sealed_setup_result():
+    return SetupResult(
+        team_domain="ex.cloudflareaccess.com",
+        tunnel_id="t-1",
+        tunnel_name="app-example-com",
+        tunnel_token=None,
+        dns_record_id="d-1",
+        dns_target="t-1.cfargotunnel.com",
+        access_app_id="a-1",
+        policy_id="p-1",
+        policy_emails=["ori@example.com"],
+        policy_domains=[],
+        service_token_client_id="cid-1",
+        service_token_client_secret=None,
+        steps=[],
+        sealed_in={
+            "tunnel_token":
+                "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_TUNNEL_TOKEN",
+            "service_token_client_secret":
+                "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_SVC_SECRET",
+        },
+    )
+
+
+def test_setup_markdown_renders_sealed_marker_for_tunnel_token():
+    md = render_setup_markdown(_sealed_setup_result(), hostname="app.example.com")
+    assert "<sealed: shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_TUNNEL_TOKEN>" in md
+    # raw value never appears (we never had one)
+    assert "raw-token" not in md
+
+
+def test_setup_markdown_renders_sealed_marker_for_service_token_secret():
+    md = render_setup_markdown(_sealed_setup_result(), hostname="app.example.com")
+    assert "<sealed: shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_SVC_SECRET>" in md
+
+
+def test_setup_json_value_fields_are_null_when_sealed():
+    js = render_setup_json(_sealed_setup_result(), hostname="app.example.com")
+    assert js["result"]["tunnel_token"] is None
+    assert js["result"]["service_token_client_secret"] is None
+    assert js["result"]["sealed_in"] == {
+        "tunnel_token":
+            "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_TUNNEL_TOKEN",
+        "service_token_client_secret":
+            "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_SVC_SECRET",
+    }
+
+
+def test_show_markdown_renders_sealed_in_lines():
+    r = ShowResult(
+        team_domain="ex.cloudflareaccess.com",
+        tunnel={"id": "t-1", "name": "app-example-com"},
+        dns={"id": "d-1", "name": "app.example.com",
+             "content": "t-1.cfargotunnel.com", "proxied": True},
+        access_app={"id": "a-1"},
+        policy={"id": "p-1"},
+        service_token={"id": "st-1", "name": "app.example.com-svc",
+                        "client_id": "cid-1"},
+        sealed_in_status={
+            "tunnel_token":
+                {"present": True,
+                 "name":
+                     "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_TUNNEL_TOKEN",
+                 "source": "cultureflare/remote-login"},
+            "service_token_client_secret":
+                {"present": False,
+                 "name":
+                     "shushu/alice/CULTUREFLARE_APP_EXAMPLE_COM_SVC_SECRET",
+                 "source": None},
+        },
+    )
+    md = render_show_markdown(r, hostname="app.example.com")
+    assert "**sealed-in:**" in md
+    assert "tunnel_token" in md
+    assert "present" in md
+    assert "absent" in md
+
+
+def test_setup_markdown_unchanged_when_no_seal():
+    # When sealed_in is empty, output must equal pre-feature output:
+    # the tunnel-token row holds the raw value.
+    r = SetupResult(
+        team_domain="ex.cloudflareaccess.com",
+        tunnel_id="t-1", tunnel_name="app-example-com",
+        tunnel_token="visible-raw-token",
+        dns_record_id="d-1", dns_target="t-1.cfargotunnel.com",
+        access_app_id="a-1",
+        policy_id="p-1", policy_emails=["x@y"], policy_domains=[],
+        service_token_client_id=None, service_token_client_secret=None,
+        steps=[],
+    )
+    md = render_setup_markdown(r, hostname="app.example.com")
+    assert "visible-raw-token" in md
+    assert "<sealed:" not in md
