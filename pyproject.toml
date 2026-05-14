@@ -1,6 +1,6 @@
 [project]
 name = "cultureflare"
-version = "0.6.0"
+version = "0.7.0"
 description = "CloudFlare Agent First Interface — agent-first CLI for CloudFlare management in the AgentCulture org."
 readme = "README.md"
 license = "MIT"

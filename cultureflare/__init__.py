@@ -8,7 +8,7 @@ from importlib.metadata import PackageNotFoundError, version as _pkg_version
 # version is rewritten to "0.3.0.devN" by the publish workflow) report
 # their actual version here. The legacy `cfafi` wheel (frozen at 0.2.2)
 # is the second-tier fallback for anyone still on the old install.
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 try:
     __version__ = _pkg_version("cultureflare")

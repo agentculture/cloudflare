@@ -4,6 +4,19 @@ All notable changes to this project will be documented here. The format
 is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-15
+
+### Added
+
+- New runtime dependency on the `agex` and `agtag` CLIs (uv tool install agex-cli / agtag) for the cicd and communicate skills.
+
+### Changed
+
+- skills/cicd: resynced from steward 0.12.0 — now a thin layer over the `agex pr` CLI (lint/open/read/reply/delta) plus the `status`/`await` steward extensions. Removed create-pr-and-wait.sh, poll-readiness.sh, pr-batch.sh, pr-comments.sh, wait-and-check.sh; workflow.sh delegates to agex. pr-status.sh, portability-lint.sh, pr-reply.sh, _resolve-nick.sh keep cultureflare-local hardening. Resolves #32.
+- skills/communicate: resynced from steward 0.12.0 — GitHub issue I/O is now agtag-backed. post-issue.sh rewritten as an `agtag issue post` wrapper (no hardcoded signature literal); added post-comment.sh (agtag issue reply) and fetch-issues.sh (agtag issue fetch). Resolves #33.
+- skills/poll: modernized to drive `agex pr read --wait` in its background subagent instead of looping the removed pr-comments.sh.
+- CLAUDE.md: layout + PR-workflow sections updated for the agex/agtag delegation; SonarCloud-key note scoped to pr-status.sh / workflow.sh status.
+
 ## [0.6.0] - 2026-05-08
 
 ### Added

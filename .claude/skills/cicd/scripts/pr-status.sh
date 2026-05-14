@@ -36,8 +36,10 @@ if [[ -z "$REPO" ]]; then
     REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 fi
 # Sonar key precedence: explicit --sonar-key flag > SONAR_PROJECT_KEY env >
-# `<owner>_<repo>` derivation. Mirrors pr-comments.sh so SKILL.md's claim
-# that the env var works for both scripts is true.
+# `<owner>_<repo>` derivation. NOTE: cultureflare's registered SonarCloud
+# project is `agentculture_cloudflare` (predates the rename), so the
+# `<owner>_<repo>` default resolves wrong here — pass --sonar-key or export
+# SONAR_PROJECT_KEY=agentculture_cloudflare.
 if [[ -z "$SONAR_KEY" ]]; then
     SONAR_KEY="${SONAR_PROJECT_KEY:-${REPO%%/*}_${REPO##*/}}"
 fi
@@ -181,5 +183,4 @@ if [[ "$INLINE_PENDING" -gt 0 ]]; then
 fi
 
 echo
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-echo "(For full comment bodies: bash \"$SCRIPT_DIR/pr-comments.sh\" $PR_NUMBER)"
+echo "(For full comment bodies: agex pr read --agent claude-code $PR_NUMBER)"

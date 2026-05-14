@@ -40,12 +40,13 @@ Skills under `.claude/skills/`:
 - `cultureflare/` — read-only inventory (zones, DNS, Workers, Pages, status).
 - `cultureflare-write/` — mutations; dry-run by default, `--apply` to commit.
   Carries `templates/` and `references/` (including `cf-api-gotchas.md`).
-- `cicd/` — PR-review workflow (vendored from steward 0.7.0): portability lint,
-  workflow orchestrator, reviewer-readiness loop, batch reply, alignment-delta.
+- `cicd/` — PR-review workflow (vendored from steward 0.12.0): a thin layer
+  over the `agex pr` CLI (`lint` / `open` / `read` / `reply` / `delta`) plus
+  two steward extensions, `status` and `await`, for SonarCloud gating.
   Renamed from `pr-review` to match the AgentCulture standard.
-- `communicate/` — cross-repo issue posts (auto-signed `- cultureflare (Claude)`)
-  and Culture mesh channel messages. Vendored from steward 0.8.0.
-- `poll/` — background reviewer-wait subagent.
+- `communicate/` — cross-repo issue posts / comments / fetches (agtag-backed,
+  auto-signed) and Culture mesh channel messages. Vendored from steward 0.12.0.
+- `poll/` — background reviewer-wait subagent (drives `agex pr read --wait`).
 - `cultureflare/` (package) — Python CLI installed via `uv tool install cultureflare`; entry point `cultureflare`. Noun/verb surface (`cultureflare <noun> <verb>`) with markdown-default + `--json` output and dry-run / `--apply` safety for mutations. See `pyproject.toml` and `docs/superpowers/specs/2026-04-24-cfafi-v0.1.0-python-cli-design.md`.
 
 Read each skill's `SKILL.md` for its current script inventory — don't
@@ -108,7 +109,7 @@ exists; this section is authoritative for *what we plan next*.
 
 All work goes through a feature branch + PR + automated review cycle (qodo, Copilot, SonarCloud). The `cicd` skill at `.claude/skills/cicd/` owns the details — read its `SKILL.md` for the full workflow. Four cheat-sheet points:
 
-> **SonarCloud key:** the registered project is `agentculture_cloudflare` (predates the cultureflare rename), not the `<owner>_<repo>`-derived `agentculture_cultureflare`. Export `SONAR_PROJECT_KEY=agentculture_cloudflare` (or pass `--sonar-key`) when invoking `pr-status.sh` / `pr-comments.sh` against this repo so SonarCloud findings actually surface.
+> **SonarCloud key:** the registered project is `agentculture_cloudflare` (predates the cultureflare rename), not the `<owner>_<repo>`-derived `agentculture_cultureflare`. `workflow.sh` defaults and exports `SONAR_PROJECT_KEY=agentculture_cloudflare`, so `workflow.sh status` / `workflow.sh await` already target the right project. Only when calling `pr-status.sh` **directly** do you need to export `SONAR_PROJECT_KEY=agentculture_cloudflare` (or pass `--sonar-key`) yourself.
 
 - **Before you start: pull latest `main` and fork the branch from there.**
 
@@ -120,6 +121,6 @@ All work goes through a feature branch + PR + automated review cycle (qodo, Copi
 
   Do this even if you think you're up to date. PRs in this repo squash-merge, which collapses their commits into a single new commit on `main`; any branch forked before that squash still carries the original commits and will hit spurious add/add conflicts on rebase. Starting fresh from the latest `main` avoids the whole class of problem.
 
-- **After `gh pr create`, immediately invoke the `poll` skill.** It spawns a background subagent that watches the PR and notifies you only when both qodo and Copilot have finished. Cheaper than self-paced wakeups because the main session doesn't burn context on heartbeats. See `.claude/skills/poll/SKILL.md`.
-- **Fetch ALL review feedback with one call:** `bash .claude/skills/cicd/scripts/pr-comments.sh <PR>` (or `workflow.sh await <PR>` for the readiness-loop + status + comments combo). It returns inline comments, issue comments, top-level reviews, and SonarCloud new issues in a single pass — don't hand-roll `gh api` / `curl sonarcloud.io` calls.
+- **After `gh pr create` / `workflow.sh open`, immediately invoke the `poll` skill.** It spawns a background subagent that drives `agex pr read --wait` and notifies you only when the automated reviewers have finished. Cheaper than self-paced wakeups because the main session doesn't burn context on heartbeats. See `.claude/skills/poll/SKILL.md`.
+- **Fetch ALL review feedback with one call:** `bash .claude/skills/cicd/scripts/workflow.sh read <PR>` (or `workflow.sh await <PR>` for the readiness-loop + SonarCloud / unresolved-thread gate combo). `agex pr read` returns CI checks, the SonarCloud gate + new issues, all comments, and a next-step footer in a single pass — don't hand-roll `gh api` / `curl sonarcloud.io` calls.
 - **Triage / reply / resolve** via the `cicd` skill once the poll wakes you.
