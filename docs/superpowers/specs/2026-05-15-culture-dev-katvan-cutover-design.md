@@ -97,13 +97,15 @@ idempotency check, `jq -n` body, `--apply` gate, `--json`).
      project). No manifest/canary gate — see Non-goals.
    - Dry-run prints the `would DELETE` path; `--apply` DELETEs.
 
-3. **`--env-var KEY=VALUE` (repeatable) on `cf-pages-project-create.sh`**
+3. **`--env-var=KEY=VALUE` (repeatable) on `cf-pages-project-create.sh`**
+   - Uses the repo's `--flag=value` convention (space-separated flag
+     values are rejected repo-wide); `${arg#*=}` yields `KEY=VALUE`.
    - Each occurrence parsed into a `{KEY: {type:"plain_text",
      value:VALUE}}` entry, merged into **both**
      `deployment_configs.preview.env_vars` and
      `deployment_configs.production.env_vars` in the POST body.
-   - `KEY` validated as `^[A-Za-z_][A-Za-z0-9_]*$`; a `KEY=VALUE`
-     missing the `=` is a usage error (exit 2).
+   - `KEY` validated as `^[A-Za-z_][A-Za-z0-9_]*$`; an `--env-var=`
+     value missing the inner `=` is a usage error (exit 2).
    - Reflected in the dry-run markdown summary and the `would POST`
      body. `--clone-from` still only clones build/deploy config, not
      env vars; explicit `--env-var` flags are additive.
@@ -148,8 +150,8 @@ cf-pages-project-create.sh katvan agentculture katvan \
   --root-dir=site \
   --build-command='bundle exec jekyll build --config _config.base.yml,_config.culture.yml -d _site_culture' \
   --destination-dir=_site_culture \
-  --env-var JEKYLL_ENV=production \
-  --env-var RUBY_VERSION=3.3 \
+  --env-var=JEKYLL_ENV=production \
+  --env-var=RUBY_VERSION=3.3 \
   --apply
 ```
 
