@@ -281,3 +281,58 @@ _assert_no_post() {
     return 1
   fi
 }
+
+# --- --env-var ---
+
+@test "cf-pages-project-create.sh --env-var injects env_vars into both preview and production" {
+  cf_mock "/pages/projects?per_page" "pages_projects_with_culture_dev.json"
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" katvan agentculture katvan \
+    --env-var=JEKYLL_ENV=production --env-var=RUBY_VERSION=3.3 --json
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.result.would_post.deployment_configs.production.env_vars.JEKYLL_ENV.type == "plain_text"'
+  echo "$output" | jq -e '.result.would_post.deployment_configs.production.env_vars.JEKYLL_ENV.value == "production"'
+  echo "$output" | jq -e '.result.would_post.deployment_configs.production.env_vars.RUBY_VERSION.value == "3.3"'
+  echo "$output" | jq -e '.result.would_post.deployment_configs.preview.env_vars.JEKYLL_ENV.value == "production"'
+}
+
+@test "cf-pages-project-create.sh without --env-var omits env_vars entirely" {
+  cf_mock "/pages/projects?per_page" "pages_projects_with_culture_dev.json"
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" katvan agentculture katvan --json
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.result.would_post.deployment_configs.production | has("env_vars") | not'
+  echo "$output" | jq -e '.result.would_post.deployment_configs.preview | has("env_vars") | not'
+}
+
+@test "cf-pages-project-create.sh --env-var value containing = is preserved" {
+  cf_mock "/pages/projects?per_page" "pages_projects_with_culture_dev.json"
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" katvan agentculture katvan \
+    --env-var=FOO=a=b --json
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.result.would_post.deployment_configs.production.env_vars.FOO.value == "a=b"'
+}
+
+@test "cf-pages-project-create.sh --env-var without inner = is a usage error" {
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" katvan agentculture katvan \
+    --env-var=JEKYLL_ENV
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"must be KEY=VALUE"* ]]
+}
+
+@test "cf-pages-project-create.sh --env-var with invalid key is a usage error" {
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" katvan agentculture katvan \
+    --env-var=1BAD=x
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"invalid --env-var key"* ]]
+}
+
+@test "cf-pages-project-create.sh --env-var --apply sends env_vars in the POST body" {
+  cf_mock "/pages/projects?per_page" "pages_projects_with_culture_dev.json"
+  cf_mock "/pages/projects"          "pages_project_create_ok.json"
+  run bash "$WRITE_SCRIPTS/cf-pages-project-create.sh" katvan agentculture katvan \
+    --env-var=JEKYLL_ENV=production --apply
+  [ "$status" -eq 0 ]
+  grep -qF '"env_vars"' "$BATS_TEST_TMPDIR/curl.log"
+  grep -qF '"JEKYLL_ENV"' "$BATS_TEST_TMPDIR/curl.log"
+  grep -qF '"plain_text"' "$BATS_TEST_TMPDIR/curl.log"
+  grep -qF '"production"' "$BATS_TEST_TMPDIR/curl.log"
+}
