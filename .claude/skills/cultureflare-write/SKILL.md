@@ -58,6 +58,7 @@ token**) with these *additional* scopes on top of the read scopes:
   required by `cultureflare dns create` and `cf-dns-create.sh`
 - **Account · Cloudflare Pages · Edit** (this account) —
   required by `cf-pages-project-create.sh`,
+  `cf-pages-domain-add.sh`, `cf-pages-domain-remove.sh`,
   `cf-pages-deployment-delete.sh`, and
   `cf-pages-deployments-purge.sh`. Creating a **GitHub-connected**
   Pages project (no `--direct-upload`) additionally needs the
@@ -110,6 +111,8 @@ Every write operation in this skill follows the same shape:
 |---|---|
 | Create a DNS record | `cultureflare dns create <zone> <type> <name> <content>` *(dry-run; `--apply` to commit)* |
 | Create a Pages project | `bash .claude/skills/cultureflare-write/scripts/cf-pages-project-create.sh ...` *(Python port pending)* |
+| Add a custom domain to a Pages project | `bash .claude/skills/cultureflare-write/scripts/cf-pages-domain-add.sh ...` |
+| Remove a custom domain from a Pages project | `bash .claude/skills/cultureflare-write/scripts/cf-pages-domain-remove.sh ...` |
 | Deploy a Worker | `bash .claude/skills/cultureflare-write/scripts/cf-worker-create.sh ...` |
 | Route a Worker | `bash .claude/skills/cultureflare-write/scripts/cf-workers-route-create.sh ...` |
 | Add a redirect | `bash .claude/skills/cultureflare-write/scripts/cf-redirect-create.sh ...` |
@@ -272,6 +275,13 @@ Flags:
 - `--compatibility-date=YYYY-MM-DD` — applied to both preview and
   production deployment configs.
 - `--build-image-version=N` — `1`, `2`, or `3` (default `3` = latest).
+- `--env-var=KEY=VALUE` — set a deployment environment variable on
+  **both** the preview and production deployment configs. Repeatable
+  — pass it once per variable. `KEY` must match
+  `[A-Za-z_][A-Za-z0-9_]*`; a value missing the inner `=` is a usage
+  error. Used by the katvan cutover for `JEKYLL_ENV=production` and
+  `RUBY_VERSION=3.3`. `--clone-from` does **not** copy env vars —
+  they are always explicit.
 - `--apply` — actually POST. Without it, dry-run.
 - `--json` — raw CloudFlare response envelope (or simulated body in
   dry-run).
@@ -290,8 +300,8 @@ installation/authorization step in the GitHub org admin UI, not
 something this skill can automate.
 
 Custom domains (including apex mappings like `culture.dev`) are not
-created by this script; attach them in the Pages dashboard or via a
-follow-on `cf-pages-domain-add.sh` once that lands.
+attached by this script; use `cf-pages-domain-add.sh` /
+`cf-pages-domain-remove.sh` (below) for that.
 
 ### cf-worker-create.sh
 
@@ -382,6 +392,81 @@ exit 1 if a route with the identical `{pattern, script}` pair
 already exists. Different scripts mapped to the same pattern (or the
 same script on different patterns) are allowed — only exact dupes
 are refused.
+
+### cf-pages-domain-add.sh
+
+Binds a custom domain to a Cloudflare Pages project — `POST
+/accounts/:id/pages/projects/:project/domains` with body
+`{"name": DOMAIN}`. Pre-flight lists the project's existing custom
+domains, which also confirms the project exists (a missing project
+surfaces CloudFlare's structured error) and enforces idempotency
+(refuses if `DOMAIN` is already attached).
+
+```sh
+# Dry-run — prints the would-POST body, no mutation:
+bash .claude/skills/cultureflare-write/scripts/cf-pages-domain-add.sh \
+  katvan culture.dev
+
+# Apply for real:
+bash .claude/skills/cultureflare-write/scripts/cf-pages-domain-add.sh \
+  katvan culture.dev --apply
+```
+
+Positional args:
+
+- `PROJECT` — Pages project name (resolved via its `/domains` list).
+- `DOMAIN` — the custom domain / hostname to attach.
+
+Flags:
+
+- `--apply` — actually POST. Without it, dry-run.
+- `--json` — raw CloudFlare response envelope (or simulated body in
+  dry-run).
+
+Exit codes: `0` success (dry-run or apply); `1` account id missing /
+project not found / domain already attached / API error; `2` usage
+error.
+
+### cf-pages-domain-remove.sh
+
+Detaches a custom domain from a Cloudflare Pages project — `DELETE
+/accounts/:id/pages/projects/:project/domains/:domain`. Pre-flight
+lists the project's custom domains; refuses with exit 1 if `DOMAIN`
+is **not** attached (a silent no-op would hide a typo). This is the
+step that can take a production domain dark, so the dry-run banner
+names the project and domain explicitly.
+
+```sh
+# Dry-run — prints the would-DELETE URL, no mutation:
+bash .claude/skills/cultureflare-write/scripts/cf-pages-domain-remove.sh \
+  culture-dev culture.dev
+
+# Apply for real:
+bash .claude/skills/cultureflare-write/scripts/cf-pages-domain-remove.sh \
+  culture-dev culture.dev --apply
+```
+
+Positional args:
+
+- `PROJECT` — Pages project name (resolved via its `/domains` list).
+- `DOMAIN` — the custom domain / hostname to detach.
+
+Flags:
+
+- `--apply` — actually DELETE. Without it, dry-run.
+- `--json` — raw CloudFlare response envelope (or simulated body in
+  dry-run).
+
+Exit codes: `0` success (dry-run or apply); `1` account id missing /
+project not found / domain not attached / API error; `2` usage
+error.
+
+**Moving a custom domain between projects** (the `culture.dev` →
+katvan cutover): CloudFlare lets a hostname be a custom domain on
+only one Pages project at a time, so the move is
+`cf-pages-domain-remove.sh OLD DOMAIN --apply` then
+`cf-pages-domain-add.sh NEW DOMAIN --apply`, run back-to-back. See
+`docs/superpowers/specs/2026-05-15-culture-dev-katvan-cutover-design.md`.
 
 ### 3.3 cf-pages-deployment-delete.sh
 
