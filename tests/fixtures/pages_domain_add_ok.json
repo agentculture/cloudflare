@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": {
+    "id": "domain-id-culture-dev-new",
+    "name": "culture.dev",
+    "status": "pending",
+    "created_on": "2026-05-15T12:00:00.000000Z"
+  }
+}

@@ -51,6 +51,9 @@
 #   --compatibility-date=DATE   YYYY-MM-DD, applied to both preview and
 #                               production deployment configs
 #   --build-image-version=N     1, 2, or 3 (default: 3 = latest)
+#   --env-var=KEY=VALUE         set a deployment environment variable on
+#                               both preview and production. Repeatable.
+#                               KEY must match [A-Za-z_][A-Za-z0-9_]*.
 #   --apply                     actually POST (without it, dry-run)
 #   --json                      raw CF response envelope (or simulated
 #                               body in dry-run)
@@ -72,6 +75,7 @@ destination_dir=""
 root_dir=""
 compatibility_date=""
 build_image_version=""
+env_vars=()
 # Track whether each overridable flag was explicitly passed: "" is a
 # meaningful value (e.g. clear a cloned build_command) that's distinct
 # from "unset" (fall back to clone or built-in default). Without these
@@ -96,6 +100,18 @@ for arg in "$@"; do
     --root-dir=*)             root_dir="${arg#*=}"; root_dir_set=1 ;;
     --compatibility-date=*)   compatibility_date="${arg#*=}"; compatibility_date_set=1 ;;
     --build-image-version=*)  build_image_version="${arg#*=}"; build_image_version_set=1 ;;
+    --env-var=*)
+      ev="${arg#*=}"
+      if [[ "$ev" != *=* ]]; then
+        echo "ERROR: --env-var must be KEY=VALUE, got: $ev" >&2
+        exit 2
+      fi
+      if [[ ! "${ev%%=*}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        echo "ERROR: invalid --env-var key: ${ev%%=*}" >&2
+        exit 2
+      fi
+      env_vars+=("$ev")
+      ;;
     -h|--help)
       awk 'NR==1{next} /^#/{sub(/^# ?/, ""); print; next} {exit}' "$0"
       exit 0
@@ -249,6 +265,19 @@ else effective_compat_date="$cloned_compat_date"; fi
 if (( build_image_version_set ));  then effective_build_image="$build_image_version";
 else effective_build_image="${cloned_build_image:-3}"; fi
 
+# Build the env_vars object for deployment_configs from any --env-var
+# flags. Empty when none were passed, in which case the body omits
+# env_vars entirely (same treatment as an unset compatibility_date).
+env_vars_json='{}'
+if (( ${#env_vars[@]} > 0 )); then
+  for ev in "${env_vars[@]}"; do
+    # shellcheck disable=SC2016  # single-quoted jq filter
+    env_vars_json=$(jq -n --argjson acc "$env_vars_json" \
+      --arg k "${ev%%=*}" --arg v "${ev#*=}" \
+      '$acc + {($k): {type: "plain_text", value: $v}}')
+  done
+fi
+
 # Build the POST body. Unset fields are emitted as empty-string /
 # default values — CF treats an unset build_command as "no build
 # step" (direct upload style), which is a valid state.
@@ -264,6 +293,7 @@ body=$(jq -n \
   --arg compat_date    "$effective_compat_date" \
   --argjson build_image "$effective_build_image" \
   --argjson direct_upload "$direct_upload" \
+  --argjson env_vars "$env_vars_json" \
   '({
     name: $name,
     production_branch: $prod_branch,
@@ -278,13 +308,17 @@ body=$(jq -n \
         always_use_latest_compatibility_date: false,
         build_image_major_version: $build_image,
         usage_model: "standard"
-      } + (if $compat_date == "" then {} else {compatibility_date: $compat_date} end)),
+      }
+      + (if $compat_date == "" then {} else {compatibility_date: $compat_date} end)
+      + (if ($env_vars | length) == 0 then {} else {env_vars: $env_vars} end)),
       production: ({
         fail_open: true,
         always_use_latest_compatibility_date: false,
         build_image_major_version: $build_image,
         usage_model: "standard"
-      } + (if $compat_date == "" then {} else {compatibility_date: $compat_date} end))
+      }
+      + (if $compat_date == "" then {} else {compatibility_date: $compat_date} end)
+      + (if ($env_vars | length) == 0 then {} else {env_vars: $env_vars} end))
     }
   })
   + (if $direct_upload == 1 then {} else {
@@ -321,6 +355,9 @@ _render_summary_md() {
   printf -- '- **root_dir:** %s\n' "${effective_root_dir:-<repo root>}"
   printf -- '- **compatibility_date:** %s\n' "${effective_compat_date:-<cf default>}"
   printf -- '- **build_image_major_version:** %s\n' "$effective_build_image"
+  if (( ${#env_vars[@]} > 0 )); then
+    printf -- '- **env_vars:** %s\n' "${env_vars[*]}"
+  fi
   if [[ -n "$clone_from" ]]; then
     printf -- '- **cloned_from:** %s\n' "$clone_from"
   fi

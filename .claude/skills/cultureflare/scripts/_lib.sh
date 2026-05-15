@@ -189,7 +189,16 @@ cf_api_paginated() {
 
   local page=1 response page_results total_pages last_info='{}'
   while :; do
-    response=$(cf_api "${path}${separator}per_page=${per_page}&page=${page}")
+    # `|| exit $?` is load-bearing — without it, calling cf_api_paginated
+    # from a context that suppresses `set -e` (e.g. `if ! x=$(...)`,
+    # `x=$(...) || ...`, pipelines except the last) silently swallows
+    # cf_api's `exit 1`. The suppression propagates into the function
+    # body, so neither `inherit_errexit` nor the failing assignment
+    # alone triggers termination. `exit` is unconditional and exits the
+    # surrounding subshell regardless of `set -e` state, which makes
+    # cf_api_paginated propagate transport / success:false failures the
+    # same way cf_api itself does.
+    response=$(cf_api "${path}${separator}per_page=${per_page}&page=${page}") || exit $?
     page_results=$(printf '%s' "$response" | jq '.result // []')
     # Accumulated set comes in via file (bounded by disk); single page
     # comes in via process substitution (bounded by CF_PAGE_SIZE, so
